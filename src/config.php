@@ -490,14 +490,10 @@ function bili_parse($url, $cookie = BILI_COOKIE, $qn = 127, $timeout = 8) {
     // B站 playurl 的 durl[].url 可能是 http:// 前缀；https 站点里浏览器/下载器对
     // http 直链会降级或限速，统一升级为 https（B站 CDN 同时支持 http/https）。
     if (strpos($video, 'http://') === 0) $video = 'https://' . substr($video, 7);
-    // 关键优化（直连走用户带宽）：B站 CDN 默认返回 platform=pc 的直链，该链路校验来源
-    // （需 bilibili Referer/UA），浏览器带 no-referrer 直连会 403。
-    // 实测把直链参数 platform=pc 改写为 platform=html5 后，绝大多数 CDN 节点（upos-* 等）
-    // 会放行、无需任何请求头，浏览器可直接打开 → 下载即为浏览器直连 CDN，只走用户带宽。
-    // 个别节点（带 mcdn / mirrorali）改后仍可能 403，前端已有「直连失败→服务端代理」兜底。
-    if (preg_match('/platform=(pc|mcdn)/i', $video)) {
-        $video = preg_replace('/platform=(?:pc|mcdn)/i', 'platform=html5', $video);
-    }
+    // 注：B站 durl 直链带 upsig/uparams 签名（签名覆盖 platform 等参数），并需 bilibili
+    // Referer/UA 才放行。实测改写 platform=pc→html5 会破坏签名 → 直连/代理都 403，
+    // 因此**不在此改写**。下载/播放统一由前端「直连优先、失败走服务端代理（代填正确
+    // Referer）兜底」处理，代理端自动带 bilibili Referer，保证能下。
     $accept = $p['data']['accept_quality'] ?? [];
     // 若用户自选的画质高于当前账号/游客可用上限，给提示（如游客选 1080P 实际回落 720P）
     $qnote = '';
