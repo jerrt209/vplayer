@@ -975,25 +975,47 @@ function isBiliUrl(url) {
   return /bilivideo\.|mountaintoys\.|hdslb\.|biliimg\./.test(url || '');
 }
 
+/* B站「强防盗链」节点：即使 no-referrer / platform=html5 也必 403（需 bilibili Referer/UA）。
+   akamaized（mirrorakam）、mirrorali、mcdn2、mcdn.bilivideo 等归类于此。
+   → 这类节点下载必须走服务端代理（服务器代填正确 Referer + UA）才能成功。
+   → 其余 upos-* / mirror 等普通节点则浏览器直连、走用户带宽。 */
+function isBiliStrongProtect(url) {
+  return /(?:mirrorakam\.akamaized\.net|mirrorali|(?:^|\.)mcdn2?\.|mcdn\.bilivideo|\.mcdn\.)/i.test(url || '');
+}
+
 /* 智能下载：浏览器原生下载器触发（不 fetch、不 blob，交给系统下载器多线程并发、
    带宽自适应、原生进度条）。
    关键修复：之前 <a href="..." download onclick=...> 被浏览器跟随一次 + onclick 再一次，
    现在 onclick 首句同步 preventDefault + 用临时 <a> click 触发，仅下载一次。
    ——
-   路由规则（全平台统一直连优先）：
-   · 所有平台（含 B站）浏览器直连源站 CDN：<a download referrerPolicy="no-referrer">
-     让系统下载器直接连 CDN，速度只取决于用户带宽，全程不经本站服务器、不占本站出口。
-   · 若个别 B站 节点对游客仍回 403，播放/封面/剪辑会自动走服务端代理
-     （带正确 Referer + Range）兜底。 */
+   路由规则（全平台直连优先，B站按节点分流）：
+   · B站普通节点（upos-* 等，platform 已由后端改写 html5）→ 浏览器 no-referrer 直连，
+     走用户带宽，不经本站服务器。
+   · B站强防盗链节点（akamaized/mirrorali/mcdn2 等）→ 必 403，改走服务端代理
+     （wm_api proxy_video，服务器代填正确 Referer/UA）保证能下。
+   · 其余平台（抖音等）→ 一律浏览器 no-referrer 直连，走用户带宽。 */
 function smartDownload(url, name, ev) {
   if (ev) {
     try { ev.preventDefault(); } catch (_) {}
     try { ev.stopImmediatePropagation(); } catch (_) {}
   }
   try { showDlLoading(); } catch (_) {}
-  // 全平台一律浏览器直连源站 CDN：<a download> 让系统下载器直接连 CDN，
-  // 速度只取决于用户带宽，不经本站服务器、不占本站出口。B站同样直连。
-  // （若个别 B站 节点对游客仍回 403，播放/封面/剪辑会自动走服务端代理兜底。）
+  // B站强防盗链节点：浏览器直连必 403 → 走服务端代理（代填 Referer/UA）下载。
+  if (isBiliStrongProtect(url)) {
+    const a = document.createElement('a');
+    a.href = dlUrl(url, name);          // 走本站代理，服务器代填 bilibili Referer/UA
+    a.referrerPolicy = 'no-referrer';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => a.remove(), 0);
+    setTimeout(() => {
+      try { hideDlLoading(); } catch (_) {}
+      try { toast('该B站节点需防盗链代转，已走服务端代理下载：' + name); } catch (_) {}
+    }, 600);
+    return;
+  }
+  // 其余（含 B站普通节点 / 全平台）→ 浏览器直连源站 CDN，走用户带宽。
   const a = document.createElement('a');
   a.href = url;                        // 直连 CDN，不经服务器
   a.download = name;
