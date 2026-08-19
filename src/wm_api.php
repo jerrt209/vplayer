@@ -20,9 +20,6 @@ if (!is_array($post)) {
 $post = array_merge($_POST, $post);
 $action = $post['action'] ?? ($_GET['action'] ?? '');
 
-// 会话里记录免费次数（未登录用户）
-if (!isset($_SESSION['free_used'])) $_SESSION['free_used'] = 0;
-
 function api_ok($data)   { echo json_encode(array_merge(['success' => true], $data), JSON_UNESCAPED_UNICODE); }
 function api_err($msg, $extra = []) {
     echo json_encode(array_merge(['success' => false, 'msg' => $msg], $extra), JSON_UNESCAPED_UNICODE);
@@ -30,69 +27,13 @@ function api_err($msg, $extra = []) {
 
 switch ($action) {
 
-    // 查询登录态 + 剩余免费次数
+    // 查询登录态（已去除 OAuth 登录中心，固定返回未登录游客态，前端不再依赖）
     case 'check':
-        $user = $_SESSION['oauth_user'] ?? null;
-        api_ok([
-            'logged_in' => !empty($user),
-            'user'      => $user ? ['username' => $user['username']] : null,
-            'free_left' => FREE_TRIES - $_SESSION['free_used'],
-        ]);
+        api_ok(['logged_in' => false, 'user' => null, 'free_left' => 0]);
         break;
 
-    // 返回授权地址（弹窗点“前往登录”时调用）
-    case 'login_url':
-        if (strpos(REDIRECT_URI, '你的域名') !== false) {
-            api_err('尚未配置回调地址：请修改 config.php 的 REDIRECT_URI 为你的真实域名');
-            break;
-        }
-        $state = bin2hex(random_bytes(16));
-        $_SESSION['oauth_state'] = $state;
-        $_SESSION['oauth_next']  = 'index.html';
-        // PKCE（S256）—— 新版 OAuth 对所有客户端强制要求
-        $verifier  = bin2hex(random_bytes(32));                                  // 64 位 hex，符合 [43,128] 长度
-        $challenge = rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=');
-        $_SESSION['oauth_verifier'] = $verifier;                                 // 换码时取用，防篡改
-        $params = http_build_query([
-            'response_type'          => 'code',
-            'client_id'              => CLIENT_ID,
-            'redirect_uri'           => REDIRECT_URI,
-            'scope'                  => OAUTH_SCOPE,
-            'state'                  => $state,
-            'code_challenge'         => $challenge,
-            'code_challenge_method'  => 'S256',
-        ]);
-        api_ok(['url' => OAUTH_AUTHORIZE . '&' . $params]);
-        break;
-
-    case 'logout':
-        session_destroy();
-        api_ok([]);
-        break;
-
-    // 探测 OAuth 授权中心（api.ijerrt.cn）连通性，供前端呼吸灯显示
-    case 'oauth_ping':
-        $t0 = microtime(true);
-        $r = waf_fetch(OAUTH_AUTHORIZE, 'GET');
-        $latency = max(0, round((microtime(true) - $t0) * 1000));
-        $http    = isset($r['http']) ? (int)$r['http'] : 0;
-        $reachable = empty($r['error']) && $http >= 200 && $http < 500;
-        api_ok([
-            'connected' => $reachable,
-            'latency'   => $latency,
-            'http'      => $http,
-        ]);
-        break;
-
-    // 解析去水印
+    // 解析去水印（已去除登录门槛与免费次数限制，直接可用）
     case 'watermark':
-        $user = $_SESSION['oauth_user'] ?? null;
-        if (empty($user)) {
-            if ($_SESSION['free_used'] >= FREE_TRIES) {
-                api_err('今日免费次数已用完，请登录后继续使用', ['need_login' => true]);
-                break;
-            }
-        }
         $text = trim($post['url'] ?? '');
         $url  = extract_url_from_text($text);
         if (!$url) {
@@ -117,7 +58,6 @@ switch ($action) {
             api_err($result['msg']);
             break;
         }
-        if (empty($user)) $_SESSION['free_used']++;
         api_ok($result);
         break;
 

@@ -94,33 +94,6 @@ body{
   display:flex;align-items:center;justify-content:center;font-size:15px;
 }
 
-/* OAuth 授权中心连接状态（呼吸灯） */
-.oauth-status{
-  display:flex;align-items:center;justify-content:center;gap:7px;width:fit-content;
-  margin:0 auto 12px;padding:6px 12px;border-radius:999px;
-  background:rgba(255,255,255,.05);border:1px solid var(--border);
-  font-size:11.5px;color:var(--text2);cursor:default;
-  transition:color .3s,border-color .3s,background .3s;
-}
-.oauth-dot{
-  width:9px;height:9px;border-radius:50%;flex-shrink:0;background:#ffa726;
-  box-shadow:0 0 0 0 rgba(255,167,38,.55);
-  animation:oauth-breathe 1.6s ease-in-out infinite;
-}
-.oauth-text{white-space:nowrap;letter-spacing:.2px;}
-@keyframes oauth-breathe{
-  0%,100%{opacity:.45;transform:scale(.82);}
-  50%{opacity:1;transform:scale(1.12);}
-}
-/* 已连接：绿色呼吸 */
-.oauth-status[data-state="connected"]{color:#7ee0a0;border-color:rgba(40,167,69,.35);background:rgba(40,167,69,.08);}
-.oauth-status[data-state="connected"] .oauth-dot{background:#28a745;box-shadow:0 0 0 0 rgba(40,167,69,.55);}
-/* 未连接：红色呼吸 */
-.oauth-status[data-state="disconnected"]{color:#ff8a96;border-color:rgba(255,90,110,.35);background:rgba(255,90,110,.08);}
-.oauth-status[data-state="disconnected"] .oauth-dot{background:#ff5a6e;box-shadow:0 0 0 0 rgba(255,90,110,.55);}
-/* 检测中：橙色呼吸（默认态，已在 .oauth-dot 上） */
-.oauth-status[data-state="checking"]{color:#ffc777;border-color:rgba(255,167,38,.30);background:rgba(255,167,38,.07);}
-
 /* 液态玻璃卡片（静态版）：去掉 backdrop-filter 实时模糊与动态高光动画，
    改用半透明纯色 + 静态高光渐变，视觉接近但零每帧模糊开销，避免低端设备卡死 */
 .glass{
@@ -356,7 +329,6 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
   .seg-row{flex-wrap:wrap;}
   .seg-no{flex:0 0 100%;text-align:left;margin-bottom:2px;}
   .seg-row input{flex:1 1 38%;}
-  .oauth-status{margin:0 auto 10px;padding:5px 10px;font-size:11px;}
 }
 /* 多片段结果区 */
 .dl-results{margin-top:14px;display:none;flex-direction:column;gap:8px;}
@@ -372,7 +344,7 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
 .dl-item .dl-size{color:var(--text2);flex:0 0 auto;font-weight:400;}
 .dl-all{margin-top:4px;align-self:flex-start;}
 
-/* 弹窗（仿爱豆模拟器登录弹窗） */
+/* 遮罩 / 弹窗（供解析加载、下载加载、剪辑加载、速度确认等模态复用） */
 .overlay{
   position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.65);
   display:flex;align-items:center;justify-content:center;padding:20px;
@@ -588,7 +560,6 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
     animation-duration:.01ms!important;
     transition-duration:.01ms!important;
   }
-  .oauth-dot{animation:none;}
   .star-think{animation:none;}
   .think-dots span{animation:none;}
 }
@@ -703,19 +674,6 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
   40%{transform:translateY(-9px);opacity:1;}
 }
 .think-text{margin-top:14px;color:#0a84ff;font-size:14px;font-weight:600;letter-spacing:.5px;}
-
-/* 下载进度条（下载弹窗内） */
-.dl-progress{margin-top:14px;width:100%;}
-.dl-progress-bar{
-  width:100%;height:6px;border-radius:3px;background:rgba(255,255,255,.12);
-  overflow:hidden;position:relative;
-}
-.dl-progress-bar i{
-  display:block;height:100%;width:0%;border-radius:3px;
-  background:linear-gradient(90deg,#0a84ff,#30d158);
-  transition:width .2s ease;
-}
-.dl-progress-label{margin-top:8px;font-size:12px;color:var(--text2);text-align:center;}
 </style>
 </head>
 <body>
@@ -727,24 +685,16 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
       <div class="brand-icon">去</div>
       <div>
         <div class="brand-name">去水印工具</div>
-        <div class="brand-sub">短视频解析 · Jerrt 会员中心</div>
+        <div class="brand-sub">短视频解析 · 免费无门槛</div>
       </div>
     </div>
     <div class="top-actions" id="top-actions">
-      <button class="icon-btn" id="logout-btn" title="退出登录" onclick="doLogout()" style="display:none;">
-        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 12H4m0 0l3.5-3.5M4 12l3.5 3.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-      </button>
-      <button class="icon-btn" id="center-btn" title="个人中心" onclick="openCenter()" style="display:none;">
-        <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2" fill="none"></circle><path d="M4 20c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="2" fill="none"></path></svg>
-      </button>
-      <button class="btn btn-primary" id="login-btn" style="width:auto;padding:9px 16px;display:inline-block;" onclick="showLoginModal()">登录</button>
-      <button class="avatar-btn" id="avatar-btn" style="display:none;" onclick="openCenter()" title="个人中心"></button>
     </div>
   </div>
 
   <div class="glass hero">
     <h1>一键提取短视频去水印</h1>
-    <p>粘贴抖音 / 快手 / 小红书 / Bilibili 等平台分享链接或整段文案，自动提取并解析无水印原片。仅限 Jerrt 会员中心账号使用。</p>
+    <p>粘贴抖音 / 快手 / 小红书 / Bilibili 等平台分享链接或整段文案，自动提取并解析无水印原片，免费无门槛使用。</p>
 
     <div id="single-area">
       <div class="input-wrap">
@@ -787,11 +737,6 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
     </div>
 
     <div class="chips" id="chips"></div>
-
-    <div class="notice" id="free-notice">
-      <svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="10" stroke="#7ec8ff" stroke-width="2" fill="none"></circle><path d="M12 8v5M12 16h.01" stroke="#7ec8ff" stroke-width="2" fill="none" stroke-linecap="round"></path></svg>
-      <span id="free-notice-text">游客可免费体验 1 次，登录后不限次数。</span>
-    </div>
   </div>
 
   <div class="glass result hidden" id="result">
@@ -809,7 +754,7 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
         在线分段剪辑
       </h3>
-      <p class="hint">可剪辑 2–3 段后一起下载，文件名自动编号为「视频名_1 / _2 / _3」。剪辑在浏览器本地完成，无需上传。游客需先登录。</p>
+      <p class="hint">可剪辑 2–3 段后一起下载，文件名自动编号为「视频名_1 / _2 / _3」。剪辑在浏览器本地完成，无需上传，免费无门槛。</p>
       <div class="seg-total" id="segTotal">视频总时长：<b>——</b></div>
       <div class="seg-list" id="segList">
         <div class="seg-block" data-idx="1">
@@ -893,10 +838,6 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
       </div>
       <div class="license-item">
         <span class="lic-dot"></span>
-        <span><b>OAuth 2.0</b><span class="lic-tag">RFC 6749</span> — 授权码 + PKCE（<a href="https://datatracker.ietf.org/doc/html/rfc7636" target="_blank" rel="noopener">RFC 7636</a>）安全增强授权流程。</span>
-      </div>
-      <div class="license-item">
-        <span class="lic-dot"></span>
         <span><b>Simple Icons</b><span class="lic-tag">CC0 1.0</span> — 各平台品牌 SVG 图标，可自由使用。</span>
       </div>
       <div class="license-item">
@@ -915,12 +856,9 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
   </div>
 
   <div class="footer">
-    <!-- OAuth 授权中心连接状态（呼吸灯）：绿=已连接 / 红=未连接 / 橙=检测中 -->
-    <div class="oauth-status" id="oauth-status" data-state="checking" title="Jerrt 会员中心连接状态">
-      <span class="oauth-dot"></span>
-      <span class="oauth-text" id="oauth-text">正在检测 Jerrt 会员中心连接…</span>
+    <div class="contrib">
+      <span>© 2026 <b>去水印工具</b> · 免费无门槛使用</span>
     </div>
-    由 <a href="https://api.ijerrt.cn/oauth/oauth.php?action=profile" target="_blank" rel="noopener">Jerrt 会员中心</a> 提供统一登录 · OAuth 2.0 授权登录
   </div>
 </div>
 
@@ -943,10 +881,6 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
     </div>
     <div class="think-dots"><span></span><span></span><span></span></div>
     <div class="think-text" id="dl-loading-text">正在努力获取下载链接…</div>
-    <div class="dl-progress" id="dl-progress" style="display:none;">
-      <div class="dl-progress-bar"><i id="dl-progress-fill"></i></div>
-      <div class="dl-progress-label" id="dl-progress-label"></div>
-    </div>
   </div>
 </div>
 
@@ -958,26 +892,6 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
     </div>
     <div class="think-dots"><span></span><span></span><span></span></div>
     <div class="think-text" id="trim-loading-text">正在努力剪辑中，请勿离开或重复点击</div>
-  </div>
-</div>
-
-<!-- 登录弹窗（仿爱豆模拟器，不直接跳转） -->
-<div class="overlay hidden" id="login-modal">
-  <div class="modal">
-    <button class="modal-close" onclick="closeLoginModal()">×</button>
-    <div class="center-brand">
-      <div class="provider-badge">
-        <svg width="34" height="34" viewBox="0 0 56 56"><circle cx="28" cy="28" r="22" fill="#ffffff" opacity="0.16"></circle><path d="M20 28.5 L25 33.5 L37 21" fill="none" stroke="#ffffff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-      </div>
-      <span style="font-size:12px;font-weight:700;letter-spacing:.5px;color:var(--text);">Jerrt 会员中心</span>
-    </div>
-    <h2 style="margin-top:6px;">登录以继续使用</h2>
-    <p class="sub2">使用 Jerrt 会员中心统一登录后，即可无限次解析短视频去水印，并解锁在线分段剪辑。</p>
-    <button class="btn btn-primary" onclick="redirectToOAuth()">
-      <svg viewBox="0 0 24 24" width="16" height="16"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"></path></svg>
-      使用 Jerrt 会员中心 登录
-    </button>
-    <button class="btn btn-outline" onclick="closeLoginModal()">稍后再说</button>
   </div>
 </div>
 
@@ -1006,16 +920,13 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
 <div class="toast error" id="toast">网络连接异常</div>
 
 <script>
-/* ===== 后端接口配置（与已部署的 wm_api.php / wm_callback.php 一致） ===== */
+/* ===== 后端接口配置 ===== */
 const API = 'wm_api.php';
-const OAUTH_CENTER = 'https://api.ijerrt.cn/oauth/oauth.php?action=profile';
-// 视频代理地址：留空 = 用本站 PHP 代理（proxy_video）；
-// 部署 Cloudflare Worker 后填其地址（如 https://wm-proxy.xxx.workers.dev）即可就近加速下载与剪辑。
+// 视频代理地址：留空 = 用本站 PHP 代理（proxy_video），仅供「直连失败时」兜底；
+// 部署 Cloudflare Worker 后填其地址（如 https://wm-proxy.xxx.workers.dev）即可就近加速剪辑。
 const PROXY = '';
 
-let STATE = { user: null, loggedIn: false, videoUrl: '', duration: 0, freeLeft: 1 };
-let pollTimer = null;
-let popup = null;
+let STATE = { user: null, loggedIn: false, videoUrl: '', duration: 0, freeLeft: 0 };
 
 /* ===== 基础请求 ===== */
 async function api(action, data = {}, opts = {}) {
@@ -1055,187 +966,6 @@ function proxyVideoUrl(url) {
 function dlUrl(url, name) {
   return proxyVideoUrl(url) + '&name=' + encodeURIComponent(name);
 }
-/* 下载进度条更新：显示百分比 / 已下 MB */
-function updateDlProgress(received, total) {
-  const bar = document.getElementById('dl-progress');
-  const fill = document.getElementById('dl-progress-fill');
-  const label = document.getElementById('dl-progress-label');
-  const text = document.getElementById('dl-loading-text');
-  if (!bar || !fill) return;
-  bar.style.display = 'block';
-  const mb = (received / 1048576).toFixed(1);
-  if (total) {
-    const pct = Math.round(received / total * 100);
-    fill.style.width = pct + '%';
-    label.textContent = mb + 'MB / ' + (total / 1048576).toFixed(1) + 'MB (' + pct + '%)';
-  } else {
-    fill.style.width = '70%';   // 未知总大小时显示为流动的 70%
-    label.textContent = '已下载 ' + mb + 'MB';
-  }
-  if (text) text.textContent = '正在下载：' + (total ? Math.round(received/total*100) + '%' : mb + 'MB');
-}
-
-/* fetch + 流式读取 + 进度条 + blob 保存：经代理（同源或 Worker），跨域也能存盘，
-   并且能看到真实下载进度条（用户要的「心安」体验）。
-   带断点续传：网络抖动中断后自动从已下字节继续，最多重试 4 次，不从头再来。 */
-async function downloadViaProxy(url, name, ev) {
-  if (ev) ev.preventDefault();
-  try {
-    const blob = await fetchResumable(dlUrl(url, name), (rec, total) => updateDlProgress(rec, total));
-    const burl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = burl; a.download = name;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(burl), 5000);
-    hideDlLoading();          // 下载完成，关闭弹窗
-    toast('下载完成：' + name);
-  } catch (e) {
-    hideDlLoading();
-    toast('下载失败：' + (e.message || e), 'error');
-  }
-}
-
-/* 断点续传式流式读取：支持 Range，中断后从 offset 继续，最多 retries 次。
-   返回完整 Blob。适用于无法边下边写盘的浏览器（Safari/移动端）回退通道。 */
-async function fetchResumable(url, onProgress, retries = 4) {
-  let chunks = [];
-  let received = 0;
-  let total = 0;
-  let attempt = 0;
-  for (;;) {
-    try {
-      const headers = {};
-      if (received > 0) headers['Range'] = 'bytes=' + received + '-';
-      const resp = await fetch(url, { headers });
-      // 206=续传成功，200=服务器忽略 Range 从头返回（需清空已收）
-      if (resp.status === 200) { chunks = []; received = 0; }
-      else if (resp.status !== 206) throw new Error('HTTP ' + resp.status);
-      const cl = parseInt(resp.headers.get('content-length') || '0', 10);
-      // 续传时 content-length 是「剩余字节」，要加回已收部分才是总量
-      total = resp.status === 206
-        ? received + (resp.headers.get('content-range') ? parseInt((resp.headers.get('content-range').match(/\/(\d+)$/) || [0, cl])[1], 10) : received + cl)
-        : cl;
-      const reader = resp.body && resp.body.getReader ? resp.body.getReader() : null;
-      if (!reader) {
-        const buf = await resp.arrayBuffer();
-        chunks.push(new Uint8Array(buf)); received += buf.byteLength;
-        if (onProgress) onProgress(received, total);
-        break;
-      }
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        received += value.length;
-        if (onProgress) onProgress(received, total);
-      }
-      break;   // 完整读到底，成功
-    } catch (e) {
-      if (e && e.name === 'AbortError') throw e;   // 用户主动取消，不回退重试
-      if (++attempt > retries) throw e;           // 重试耗尽，抛出
-      // 短暂等待后重试，进度条停在已收字节处，续传从 received 继续
-      await new Promise(res => setTimeout(res, 800 * attempt));
-    }
-  }
-  return new Blob(chunks);
-}
-
-/* 流式下载（经代理）：代理已带 Content-Disposition: attachment，浏览器会直接
-   弹出下载并边下边存盘，不占内存、立即开始，是 B站/大视频的最优通道。
-   用隐藏 iframe 触发导航，避免离开当前页面；等到 iframe 真正加载代理响应
-   （表示下载已开始）再关闭加载动画，让用户看到「正在获取下载链接」的过渡提示。 */
-function streamDownloadViaProxy(url, name) {
-  const u = dlUrl(url, name);
-  const iframe = document.createElement('iframe');
-  iframe.style.display = 'none';
-  document.body.appendChild(iframe);
-  // 等 iframe 代理响应到达（下载已真正开始）再关弹窗 + toast
-  // 注意：iframe 加载成功表示代理已收到请求并开始返回内容，
-  // 这正是「获取下载链接」完成的临界点。
-  iframe.addEventListener('load', () => {
-    hideDlLoading();
-    toast('已开始下载（代理加速）：' + name);
-    // 稍后清理 iframe，避免页面残留
-    setTimeout(() => { iframe.remove(); }, 60000);
-  }, { once: true });
-  // 兜底：5秒后无论是否触发 load 都关弹窗（防止某些浏览器 load 不触发）
-  setTimeout(() => {
-    if (!iframe.parentNode) return;
-    hideDlLoading();
-    toast('已开始下载（代理加速）：' + name);
-    setTimeout(() => { iframe.remove(); }, 60000);
-  }, 5000);
-  iframe.src = u;
-}
-/* 直连源站下载：不经过任何代理，国内 CDN 直连最快。
-   仅当源站允许跨域(CORS)时才成功，否则浏览器拒绝读取响应并由 smartDownload 回退代理。 */
-async function downloadDirect(url, name) {
-  const resp = await fetch(url, { referrerPolicy: 'no-referrer' });
-  if (!resp.ok) throw new Error('直连返回 ' + resp.status);
-  const blob = await resp.blob();
-  const burl = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = burl; a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(burl), 5000);
-}
-/* 流式写盘下载：桌面 Chromium 支持 File System Access API，可边下边写磁盘，
-   不占内存，适合长视频；移动端/Safari 不支持时返回 false 由上层回退。
-   支持传入自定义 URL（如代理地址）与进度回调，边下边写边显示进度。
-   带断点续传：网络抖动中断后自动从已写字节处继续（Range + writable.seek），
-   最多重试 4 次，进度条不停在半路。 */
-async function streamSave(url, name, onProgress) {
-  if (!('showSaveFilePicker' in window)) return false;
-  const handle = await window.showSaveFilePicker({
-    suggestedName: name,
-    types: [{ description: '视频文件', accept: { 'video/mp4': ['.mp4'] } }]
-  });
-  const writable = await handle.createWritable();
-  let written = 0;   // 已成功写入磁盘的字节数（断点续传基准）
-  let total = 0;
-  let attempt = 0;
-  const retries = 4;
-  try {
-    for (;;) {
-      try {
-        const headers = {};
-        if (written > 0) headers['Range'] = 'bytes=' + written + '-';
-        const resp = await fetch(url, { headers, referrerPolicy: 'no-referrer' });
-        if (resp.status !== 200 && resp.status !== 206) throw new Error('返回 ' + resp.status);
-        // 服务器忽略 Range 从头返回 → 需把文件指针移回起点重写
-        if (resp.status === 200 && written > 0) { await writable.seek(0); written = 0; }
-        const cl = parseInt(resp.headers.get('content-length') || '0', 10);
-        total = resp.status === 206
-          ? written + (resp.headers.get('content-range') ? parseInt((resp.headers.get('content-range').match(/\/(\d+)$/) || [0, cl])[1], 10) : written + cl)
-          : cl;
-        const reader = resp.body && resp.body.getReader ? resp.body.getReader() : null;
-        if (!reader) {
-          await resp.body.pipeTo(writable);
-          written = total;
-          break;
-        }
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          await writable.write(value);
-          written += value.length;
-          if (onProgress) onProgress(written, total);
-        }
-        break;   // 完整读完
-      } catch (e) {
-        if (e && e.name === 'AbortError') throw e;   // 用户取消保存
-        if (++attempt > retries) throw e;
-        // 等待后从 written 处续传（writable 仍打开，指针停留在已写位置）
-        await new Promise(res => setTimeout(res, 800 * attempt));
-      }
-    }
-    await writable.close();
-    return true;
-  } catch (e) {
-    try { await writable.abort(); } catch (_) {}
-    throw e;
-  }
-}
 /* 下载加载提示：点击下载到链接就绪之间显示「正在努力获取下载链接」 */
 function showDlLoading() { document.getElementById('dl-loading').classList.remove('hidden'); }
 function hideDlLoading() { document.getElementById('dl-loading').classList.add('hidden'); }
@@ -1250,175 +980,43 @@ function isBiliUrl(url) {
    关键修复：之前 <a href="..." download onclick=...> 被浏览器跟随一次 + onclick 再一次，
    现在 onclick 首句同步 preventDefault + 用临时 <a> click 触发，仅下载一次。
    ——
-   路由规则（已按实测收敛）：
-   · B站 CDN（bilivideo / mountaintoys / hdslb / biliimg 等）有强防盗链：无 Referer 直连
-     (=no-referrer) 实测必 403。只能走本站代理 wm_api.php?action=proxy_video —— 服务端已自动
-     带 bilibili Referer + 正确 Range / Content-Length / 断点续传。这是 B站可下载的唯一可行路径。
-   · 其余平台（抖音等）CDN 允许无 Referer 直连 → 浏览器直连，速度只取决于用户带宽，
-     全程不经本站服务器、不占本站出口。 */
+   路由规则（全平台统一直连优先）：
+   · 所有平台（含 B站）浏览器直连源站 CDN：<a download referrerPolicy="no-referrer">
+     让系统下载器直接连 CDN，速度只取决于用户带宽，全程不经本站服务器、不占本站出口。
+   · 若个别 B站 节点对游客仍回 403，播放/封面/剪辑会自动走服务端代理
+     （带正确 Referer + Range）兜底。 */
 function smartDownload(url, name, ev) {
   if (ev) {
     try { ev.preventDefault(); } catch (_) {}
     try { ev.stopImmediatePropagation(); } catch (_) {}
   }
   try { showDlLoading(); } catch (_) {}
-  const isBili = isBiliUrl(url);                    // B站 特殊防盗链 → 走代理；其余直连
-  const target = isBili ? dlUrl(url, name) : url;   // B站代理带正确 Referer + 下载文件名
+  // 全平台一律浏览器直连源站 CDN：<a download> 让系统下载器直接连 CDN，
+  // 速度只取决于用户带宽，不经本站服务器、不占本站出口。B站同样直连。
+  // （若个别 B站 节点对游客仍回 403，播放/封面/剪辑会自动走服务端代理兜底。）
   const a = document.createElement('a');
-  a.href = target;
+  a.href = url;                        // 直连 CDN，不经服务器
   a.download = name;
-  if (!isBili) a.referrerPolicy = 'no-referrer';    // 直连才 no-referrer；代理为同源不必设
+  a.referrerPolicy = 'no-referrer';    // 不送本站 Referer，放行直连
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();
   setTimeout(() => a.remove(), 0);
   setTimeout(() => {
     try { hideDlLoading(); } catch (_) {}
-    try { toast(isBili ? '已开始下载（经本站定向代理）：' + name : '已开始下载（直连 CDN，最速）：' + name); } catch (_) {}
+    try { toast('已开始下载（直连 CDN，走用户带宽）：' + name); } catch (_) {}
   }, 600);
 }
 
 /* ===== 会话检查 ===== */
+// 已去除 Jerrt OAuth 登录中心：不再弹登录、不限额，始终视为已登录（解析/剪辑无门槛）。
 async function checkSession() {
-  const r = await api('check');
-  if (r.success && r.logged_in && r.user) {
-    STATE.loggedIn = true; STATE.user = r.user; STATE.freeLeft = r.free_left ?? 0;
-    return true;
-  }
-  STATE.loggedIn = false; STATE.freeLeft = (r.success ? (r.free_left ?? 1) : 1);
-  return false;
+  STATE.loggedIn = true; STATE.user = null; STATE.freeLeft = Infinity;
+  return true;
 }
 
-/* ===== OAuth 授权中心连接状态（呼吸灯）===== */
-function setOAuthState(state, latency) {
-  const box = document.getElementById('oauth-status');
-  const txt = document.getElementById('oauth-text');
-  if (!box || !txt) return;
-  box.dataset.state = state;
-  if (state === 'connected') {
-    txt.textContent = latency != null
-      ? `Jerrt 会员中心已连接 · ${latency}ms`
-      : 'Jerrt 会员中心已连接';
-  } else if (state === 'disconnected') {
-    txt.textContent = 'Jerrt 会员中心未连接';
-  } else {
-    txt.textContent = '正在检测 Jerrt 会员中心连接…';
-  }
-}
-let _oauthInFlight = false;
-async function checkOAuth() {
-  if (_oauthInFlight) return;           // 防止 30s 定时器 / focus / online 事件堆叠 pending 请求
-  _oauthInFlight = true;
-  setOAuthState('checking');
-  let r = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    r = await api('oauth_ping', {}, { timeout: 12000 });
-    if (r && r.success) break;          // 端点本身连通即止，无需重试
-    if (attempt === 0) await new Promise(res => setTimeout(res, 800)); // 抖动后重试一次
-  }
-  if (r && r.success && r.connected) {
-    setOAuthState('connected', r.latency);
-  } else {
-    setOAuthState('disconnected');
-  }
-  _oauthInFlight = false;
-}
-
-/* ===== 登录弹窗 ===== */
-function showLoginModal() { document.getElementById('login-modal').classList.remove('hidden'); }
-function closeLoginModal() { document.getElementById('login-modal').classList.add('hidden'); }
-
-// 授权中心完成登录后通过 postMessage 通知父窗口：比轮询更快关闭弹窗并刷新登录态（不替代现有轮询）
-window.addEventListener('message', function (e) {
-  // 只接受来自本域名（wm_callback.php 完成页）的 oauth_done 通知，防跨站伪造。
-  // 本应用部署在 vplayer.ijerrt.cn，消息源必须是同源（含可能的 https 变体）。
-  var okOrigin = (location.origin === e.origin) || (location.host === (e.origin || '').replace(/^https?:\/\//, ''));
-  if (!okOrigin) return;
-  if (e.data && e.data.type === 'oauth_done') {
-    if (popup && !popup.closed) popup.close();
-    clearInterval(pollTimer);
-    checkSession().then(function (ok) {
-      if (ok) {
-        closeLoginModal();
-        updateUI();
-        toast('登录成功，欢迎 ' + (STATE.user?.username || ''));
-        scheduleFFmpegPreload();
-      }
-    });
-  }
-});
-
-/* ===== 发起 OAuth（授权码流程，弹窗授权 + 轮询共享会话）===== */
-async function redirectToOAuth() {
-  toast('正在连接 Jerrt 会员中心…');
-  const r = await api('login_url');
-  if (!r.success) { toast(r.msg || '授权初始化失败', 'error'); return; }
-  popup = window.open(r.url, 'oauth', 'width=460,height=720');
-  startLoginPoll();
-  if (!popup) { window.location.href = r.url; }   // 弹窗被拦截则回退整页跳转
-}
-
-function startLoginPoll() {
-  clearInterval(pollTimer);
-  pollTimer = setInterval(async () => {
-    const ok = await checkSession();
-    if (ok) {
-      clearInterval(pollTimer);
-      if (popup && !popup.closed) popup.close();
-      closeLoginModal();
-      updateUI();
-      toast('登录成功，欢迎 ' + (STATE.user?.username || ''));
-      scheduleFFmpegPreload();   // 登录后空闲时后台预热剪辑引擎，不阻塞界面
-    }
-  }, 1500);
-  // 兜底：60s 后若仍未登录，停止轮询（用户可在弹窗内手动完成）
-  setTimeout(() => clearInterval(pollTimer), 60000);
-}
-
-/* ===== 个人中心 ===== */
-function openCenter() { window.open(OAUTH_CENTER, '_blank', 'noopener'); }
-
-/* ===== 登出 ===== */
-async function doLogout() {
-  await api('logout');
-  STATE.loggedIn = false; STATE.user = null;
-  updateUI();
-  toast('已退出登录');
-}
-
-/* ===== UI 状态 ===== */
-function updateUI() {
-  const loginBtn  = document.getElementById('login-btn');
-  const centerBtn = document.getElementById('center-btn');
-  const avatarBtn = document.getElementById('avatar-btn');
-  const logoutBtn = document.getElementById('logout-btn');
-  const notice    = document.getElementById('free-notice');
-  const noticeTxt = document.getElementById('free-notice-text');
-
-  if (STATE.loggedIn) {
-    loginBtn.style.display  = 'none';
-    centerBtn.style.display = 'flex';
-    logoutBtn.style.display = 'flex';
-    const name = STATE.user?.username || 'U';
-    avatarBtn.textContent = name.charAt(0).toUpperCase();
-    avatarBtn.style.display = 'flex';
-    avatarBtn.onclick = openCenter;
-    notice.classList.add('hidden');
-  } else {
-    loginBtn.style.display  = 'inline-block';
-    centerBtn.style.display = 'none';
-    logoutBtn.style.display = 'none';
-    avatarBtn.style.display = 'none';
-    notice.classList.remove('hidden');
-    if (STATE.freeLeft > 0) {
-      notice.classList.remove('warn');
-      noticeTxt.textContent = '游客可免费体验 ' + STATE.freeLeft + ' 次，登录后不限次数。';
-    } else {
-      notice.classList.add('warn');
-      noticeTxt.textContent = '免费次数已用完，请登录后继续使用。';
-    }
-  }
-}
+/* ===== UI 状态（已去除登录/会员中心，保留空实现以免调用点失效）===== */
+async function updateUI() {}
 
 /* ===== 粘贴整段文案时自动提取链接 ===== */
 document.getElementById('url-input').addEventListener('paste', (e) => {
@@ -1473,16 +1071,14 @@ async function onExtract() {
   btn.disabled = false;
 
   if (!j.success) {
-    if (j.need_login) { showLoginModal(); return; }
     toast(j.msg || '解析失败', 'error');
     return;
   }
 
-  // 游客成功后刷新剩余免费次数
   await checkSession();
   updateUI();
   renderResult(j, text);
-  if (STATE.loggedIn) scheduleFFmpegPreload();   // 已登录则空闲时后台预热剪辑引擎
+  scheduleFFmpegPreload();   // 空闲时后台预热剪辑引擎
   toast('解析成功');
   if (j.quality_note) setTimeout(() => toast(j.quality_note, 'error'), 400); // 画质回落提示
 }
@@ -1509,24 +1105,31 @@ function renderResult(j, rawText) {
     v.controls = true; v.preload = 'metadata';
     v.referrerPolicy = 'no-referrer';
     media.appendChild(v);
-    // 播放链路：B站 CDN 防盗链（no-referrer 直连实测 403），必须走带 bilibili Referer 的代理；
-    // 其他平台无防盗链 → 直连优先（no-referrer），加载失败才切代理兜底。
+    // 播放链路：所有平台统一「直连优先、代理兜底」。
+    // 直连源站 CDN（元素 no-referrer）→ 走用户带宽、不受本站限制；若加载失败
+    //（含 B站 个别节点对游客 403），自动切服务端代理（带正确 Referer）兜底，保证能播。
     const directUrl = j.video_url;
     const proxyUrl = proxyVideoUrl(j.video_url);   // 不带 name，纯流式转发，用于播放
-    let switchedToProxy = isBiliUrl(directUrl);     // B站默认直接走代理
+    let switchedToProxy = false;                    // 直连优先，失败才切代理
     v.addEventListener('error', function onErr() {
-      if (switchedToProxy) return;                 // 已切代理仍失败，不再循环
+      if (switchedToProxy) return;
       if (v.getAttribute('src') !== proxyUrl) {
         switchedToProxy = true;
         v.src = proxyUrl;
         v.load();
       }
     });
-    v.src = switchedToProxy ? proxyUrl : directUrl;
-    // 封面（poster）：B站图床(hdslb)同属防盗链，直连 403 → 走代理（带 bilibili Referer）；
-    // 其他平台直连即可（元素 no-referrer）。
+    v.src = directUrl;
+    // 封面（poster）：直连优先；B站图床个别节点需代理 → 用离屏 Image 探测，直连失败才切代理。
     if (j.cover_url) {
-      v.poster = isBiliUrl(j.cover_url) ? proxyVideoUrl(j.cover_url) : j.cover_url;
+      const coverProxy = proxyVideoUrl(j.cover_url);
+      v.poster = j.cover_url;
+      if (isBiliUrl(j.cover_url)) {
+        const probe = new Image();
+        probe.referrerPolicy = 'no-referrer';
+        probe.onerror = () => { if (v.poster !== coverProxy) v.poster = coverProxy; };
+        probe.src = j.cover_url;
+      }
     }
     const vName = base + '.mp4';
     // —— 修复「下载两次」：<a> 的 href 不再直接指向下载链接（避免浏览器默认跟随），所有下载由
@@ -1537,9 +1140,12 @@ function renderResult(j, rawText) {
     dlV.style.display = 'flex';
   } else if (j.cover_url) {
     const img = document.createElement('img');
-    // 封面路由：B站图床(hdslb/biliimg)防盗链，无 Referer 直连同样 403 → 直接走代理；其余直连。
-    img.src = isBiliUrl(j.cover_url) ? proxyVideoUrl(j.cover_url) : j.cover_url;
+    // 封面：统一直连优先（元素 no-referrer，走用户带宽），失败才切服务端代理兜底。
+    img.src = j.cover_url;
     img.referrerPolicy = 'no-referrer';
+    img.onerror = function () {
+      if (img.src.indexOf('action=proxy_video') < 0) img.src = proxyVideoUrl(j.cover_url);
+    };
     media.appendChild(img);
     const cName = base + '_cover.jpg';
     dlV.href = '#';
@@ -1757,14 +1363,13 @@ async function onBatchExtract() {
     : '';
   box.innerHTML = copyAllBtn + results.map(({ r, l }, i) => {
     if (r.success) {
-      const name = sanitizeName(r.title || 'video');
       const u = r.video_url;
       return '<div class="batch-item"><div class="bi-info"><div class="bi-title">' +
         escapeHtml(r.title || '视频') + '</div>' +
         '<span class="src-badge ' + badgeClass(r.source) + '">' + sourceText(r.source) + '</span> ' +
         platformIcon(r.platform, 13) + escapeHtml(platformName(r.platform)) + '</div>' +
         '<div class="bi-actions"><button type="button" class="bi-btn" data-copy="' + i + '">复制</button>' +
-        '<a class="bi-btn" href="' + dlUrl(u, 'batch_' + name + '.mp4') + '" download target="_blank" rel="noopener">下载</a></div></div>';
+        '<button type="button" class="bi-btn" data-batch-dl="' + i + '">下载</button></div></div>';
     }
     return '<div class="batch-item err"><div class="bi-info"><div class="bi-title">' +
       escapeHtml(l.slice(0, 48)) + '</div><div class="bi-err">' + escapeHtml(r.msg || '解析失败') + '</div></div></div>';
@@ -2012,7 +1617,6 @@ function downloadAll() {
 }
 
 async function doTrim() {
-  if (!STATE.loggedIn) { showLoginModal(); return; }
   if (!STATE.videoUrl) { toast('请先解析视频', 'error'); return; }
 
   const trimBtn = document.getElementById('trim-btn');
@@ -2098,13 +1702,12 @@ async function doTrim() {
     };
     // 整段视频只下载一次，所有片段复用（下载是主要耗时，避免重复下）
     let data;
-    // 取源：B站 防盗链无 Referer 直连必 403 → 直接走代理（服务端带 bilibili Referer）；
-    // 其余平台直连优先（最速、不占主机带宽），失败再回退服务器代理兜底。
-    if (isBiliUrl(STATE.videoUrl)) {
+    // 取源：统一直连优先（走用户带宽、不占本站出口）；直连失败（无 CORS / B站 个别节点 403）
+    // 再回退服务端代理（带正确 Referer）兜底。
+    try { data = await fetchWithProgress(STATE.videoUrl, onDl); }
+    catch (e) {
+      console.warn('直连取源失败，回退代理:', e?.message);
       data = await fetchWithProgress(proxy, onDl);
-    } else {
-      try { data = await fetchWithProgress(STATE.videoUrl, onDl); }
-      catch (e) { console.warn('直连取源失败，回退代理:', e?.message); data = await fetchWithProgress(proxy, onDl); }
     }
     await ffmpeg.writeFile('in.mp4', data);
 
@@ -2274,8 +1877,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     const all = e.target.closest('[data-copy-all]');
     if (all) { copyText((window.__batchUrls || []).filter(Boolean).join('\n')); return; }
     const b = e.target.closest('[data-copy]');
-    if (!b) return;
-    copyText((window.__batchUrls || [])[+b.dataset.copy]);
+    if (b) { copyText((window.__batchUrls || [])[+b.dataset.copy]); return; }
+    const d = e.target.closest('[data-batch-dl]');
+    if (d) { const u = (window.__batchUrls || [])[+d.dataset.batchDl]; if (u) smartDownload(u, 'batch_下载.mp4'); }
   });
   document.getElementById('batch-btn').addEventListener('click', onBatchExtract);
 
@@ -2299,15 +1903,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   // 初始平台识别
   renderChips();
   updateDetect();
-  const ok = await checkSession();
+  await checkSession();
   updateUI();
-  if (ok) scheduleFFmpegPreload();   // 已登录用户进入页面即空闲预热剪辑引擎
-
-  // OAuth 授权中心连接状态呼吸灯：进入即探测，并定时/联网恢复时复检
-  checkOAuth();
-  setInterval(checkOAuth, 30000);
-  window.addEventListener('online', checkOAuth);
-  window.addEventListener('focus', checkOAuth);
+  scheduleFFmpegPreload();   // 进入页面即空闲预热剪辑引擎
 });
 </script>
 </body>
