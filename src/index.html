@@ -788,9 +788,23 @@ async function streamSave(url, name) {
 function showDlLoading() { document.getElementById('dl-loading').classList.remove('hidden'); }
 function hideDlLoading() { document.getElementById('dl-loading').classList.add('hidden'); }
 
-/* 智能下载：直连流式写盘（最快、不爆内存）→ 直连 blob（小文件）→ 代理兜底 */
+/* 判断是否 B站 CDN 直链（带 upsig 签名 + 防盗链，浏览器直连必 403 → 必须走代理） */
+function isBiliCdn(url) {
+  return /bilivideo\.|mountaintoys\.|hdslb\.|biliimg\./.test(url || '');
+}
+
+/* 智能下载：
+   · 其它平台（抖音/快手等）CDN 允许直连 → 直连流式写盘（最快、不爆内存）→ 直连 blob → 代理兜底。
+   · B站：直连必 403，直接走第3级代理（fetch 拿 blob 触发一次下载），
+     避免「先弹保存对话框写 .crswap 失败、又再弹一次」的双重下载弹窗。 */
 async function smartDownload(url, name, ev) {
   if (ev) ev.preventDefault();
+  if (isBiliCdn(url)) {
+    showDlLoading();
+    try { await downloadViaProxy(url, name); }
+    finally { hideDlLoading(); }
+    return;
+  }
   showDlLoading();   // 显示「正在努力获取下载链接…」加载提示
   try {
     // 1) 直连 + 文件系统流式写盘（桌面 Chromium：大文件不占内存，且直连国内 CDN 最快）
