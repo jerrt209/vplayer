@@ -1,7 +1,7 @@
 # 去水印小程序 · 跨域 OAuth 登录版
 
 一个**独立部署、不在同域**的短视频去水印工具，通过标准 **OAuth 2.0 授权码流程**接入你部署在
-`https://api.ijerrt.cn/` 的 Jerrt 账号体系。
+`http://api.ijerrt.cn/` 的 Jerrt 账号体系。
 
 - 界面：液态玻璃 + 动态高光，配色克制（深色 + 紫蓝），对齐 OAuth 中心风格
 - 仅允许 OAuth 登录用户长期使用；**未登录用户仅 1 次免费体验**
@@ -16,16 +16,11 @@
 
 | 用途 | 地址 |
 | --- | --- |
-| 授权端点 | `https://api.ijerrt.cn/oauth/oauth.php?action=authorize` |
-| 令牌端点 | `https://api.ijerrt.cn/oauth/oauth_token.php` |
-| 用户信息 | `https://api.ijerrt.cn/oauth/oauth.php?action=userinfo`（**仅 `Authorization: Bearer <token>` 头**，新版已移除 `?access_token=` 查询参数用法） |
-| 个人中心 | `https://api.ijerrt.cn/oauth/oauth.php?action=profile` |
-| 管理后台 | `https://api.ijerrt.cn/oauth/oauth-admin.php` |
-
-> **新版 OAuth 适配（破坏性升级）**：授权服务器升级后强制 **PKCE（S256）** 并要求 `state` 防 CSRF；
-> 用户信息端点**不再接受 URL 令牌**，仅认 `Authorization: Bearer` 头。本包已同步适配：
-> `login_url` 生成 `code_verifier`/`code_challenge`（S256）并存入会话；`wm_callback.php` 换码时补交 `code_verifier`；
-> `oauth_userinfo()` 改为仅用 Bearer 头。令牌端点仍用 `client_id`+`client_secret` 表单（client_secret_post），与新服务器兼容。
+| 授权端点 | `http://api.ijerrt.cn/oauth/oauth.php?action=authorize` |
+| 令牌端点 | `http://api.ijerrt.cn/oauth/oauth_token.php` |
+| 用户信息 | `http://api.ijerrt.cn/oauth/oauth.php?action=userinfo`（**查询参数** `access_token=<token>`；OAUTH.md 写的 Bearer 头实测未生效，已改用查询参数） |
+| 个人中心 | `http://api.ijerrt.cn/oauth/oauth.php?action=profile` |
+| 管理后台 | `http://api.ijerrt.cn/oauth/oauth-admin.php` |
 
 > 令牌端点要求 `client_id` + `client_secret`；用户信息端点要求 `Bearer` 令牌。两端点都做了
 > api.ijerrt.cn 若启用 JS 反爬挑战（`__test` cookie），本包已在服务端用 PHP `openssl` 自动绕过（见第三节）。
@@ -76,36 +71,21 @@ $pt = openssl_decrypt(hex2bin($c), 'AES-128-CBC', hex2bin($a), OPENSSL_RAW_DATA,
 
 ---
 
-## 三·五、授权链路稳定性加固（本次新增）
-
-针对“授权码换 token / 取用户信息 / 呼吸灯探测”三处做了容错，避免瞬时抖动把用户踢下线或把状态灯卡死：
-
-- **后端换码与取信息加重试退避**：`oauth_exchange_code()` / `oauth_userinfo()` 对**网络错误、5xx、空响应**自动重试 1 次（间隔 400ms）；**4xx 与明确 JSON 错误（如 `invalid_token`）不重试**，避免无效重试拖慢登录。
-- **后端已有 25s 超时**：`waf_fetch()` 全局 `CURLOPT_TIMEOUT=25`，OAuth 调用不会无限挂起。
-- **前端 `api()` 加 12s `AbortController` 超时**：即便后端偶发慢响应，前端也不会长时间阻塞在 `await`。
-- **前端 `checkOAuth()` 加“调用中锁”**：`setInterval(30s)` / `online` / `focus` 事件并发触发时不会堆叠 pending 请求；单次抖动后自动重试一次再决定是否翻红，避免瞬时失败误判“未连接”。
-- **呼吸灯只反映授权中心可达性**（不校验登录态），语义明确；登录态仍由 `oauth_user` 会话保证。
-
-> 注：本包已在 PHP 8.3 CLI 下完成**运行时验证**（非仅静态检查）：`php -l` 四个文件无语法错误；用 PHP 内置服务器 + curl 实测 `check / login_url / logout / watermark(无效·不支持·触网失败) / oauth_ping` 全部优雅返回、无 500；tokenizer 交叉扫描 0 个未定义函数调用；纯逻辑（`detect_platform` 全平台 / `build_result` / `pick` / `cache` / `ncache`）运行时冒烟全绿。
-> **本次修复的生产级 bug**：`watermark` 动作依赖的 `cache_get()/cache_set()` 此前**从未定义**，会导致所有进入解析缓存逻辑的路径（即真实解析请求）直接 500 空响应；已补齐文件型结果缓存（带 TTL）。前端测试因打桩未触达该路径，故此前未被发现——这正是缺少真实 PHP 运行时的代价。
-
----
-
 ## 四、部署步骤（本次已为你配好）
 
-> **迁移说明**：应用域名已迁移至解析系统 `https://vplayer.ijerrt.cn`，OAuth 授权服务器为 `https://api.ijerrt.cn`。
-> 部署前请确认已在 `api.ijerrt.cn` 后台用新回调 `https://vplayer.ijerrt.cn/wm_callback.php` 重建应用，
+> **迁移说明**：应用域名已迁移至解析系统 `http://vplayer.ijerrt.cn`，OAuth 授权服务器为 `http://api.ijerrt.cn`。
+> 部署前请确认已在 `api.ijerrt.cn` 后台用新回调 `http://vplayer.ijerrt.cn/wm_callback.php` 重建应用，
 > 并把对应的 `CLIENT_ID` / `CLIENT_SECRET` 写入 `config.php`。
-> 直接把下面文件传到 `https://vplayer.ijerrt.cn/` 根目录即可。
+> 直接把下面文件传到 `http://vplayer.ijerrt.cn/` 根目录即可。
 
 ### 1) 上传到根目录
-把以下文件**直接放到 `https://vplayer.ijerrt.cn/` 根目录**（不要套子目录）：
+把以下文件**直接放到 `http://vplayer.ijerrt.cn/` 根目录**（不要套子目录）：
 ```
-index.html        →  https://vplayer.ijerrt.cn/index.html
-config.php        →  https://vplayer.ijerrt.cn/config.php
-wm_api.php        →  https://vplayer.ijerrt.cn/wm_api.php
-wm_callback.php   →  https://vplayer.ijerrt.cn/wm_callback.php
-README.md         →  https://vplayer.ijerrt.cn/README.md
+index.html        →  http://vplayer.ijerrt.cn/index.html
+config.php        →  http://vplayer.ijerrt.cn/config.php
+wm_api.php        →  http://vplayer.ijerrt.cn/wm_api.php
+wm_callback.php   →  http://vplayer.ijerrt.cn/wm_callback.php
+README.md         →  http://vplayer.ijerrt.cn/README.md
 ```
 要求：PHP ≥ 7.0，且启用 `openssl`、`curl` 扩展（绝大多数主机默认启用）。
 
@@ -113,11 +93,11 @@ README.md         →  https://vplayer.ijerrt.cn/README.md
 > 否则与后台登记、以及 `config.php` 里的 `REDIRECT_URI` 不一致，授权会失败。
 
 ### 2) 访问
-打开 `https://vplayer.ijerrt.cn/` 即可。
+打开 `http://vplayer.ijerrt.cn/` 即可。
 
 ### 3)（可选）换其他域名 / 子目录
 若以后改部署位置，需两步保持一致：
-1. 登录 `https://api.ijerrt.cn/oauth/oauth-admin.php`，删除原 `去水印工具` 应用，
+1. 登录 `http://api.ijerrt.cn/oauth/oauth-admin.php`，删除原 `去水印工具` 应用，
    用新回调地址 `https://新域名/路径/wm_callback.php` 重建（后台只能停用/删除，无就地编辑）。
 2. 把 `config.php` 的 `CLIENT_ID` / `CLIENT_SECRET` / `REDIRECT_URI` 改成新值。
 
@@ -133,28 +113,14 @@ README.md         →  https://vplayer.ijerrt.cn/README.md
 | `wm_callback.php` | OAuth 回调：换 token → 取用户 → 写会话 → 跳转 |
 | `README.md` | 本文档 |
 
-### 功能特性
-- **多平台解析**：抖音 / TikTok / 快手 / 小红书 / B站（官方直连第一方），并识别西瓜、微博、知乎、YouTube、X、视频号。
-- **多源并行竞速**：`curl_multi` 同时请求多个解析源，谁先成功用谁；失败源负缓存，连接更快更稳。
-- **本地化 / 第一方**：可配置 `LOCAL_PARSER_URL` 指向你自托管的解析服务（推荐 Cloudflare Worker），公共接口仅作兜底。
-- **批量解析**：每行一个链接，并发解析并逐条展示结果（复制 / 下载）。
-- **历史记录**：本地保存最近 30 条解析记录，一键载入重解析。
-- **明暗主题**：一键切换并持久化。
-- **平台实时识别**：输入时即时显示识别到的平台。
-- **在线分段剪辑**：浏览器本地 ffmpeg.wasm 截取 2–3 段，支持倍速。
-- **性能优化**：边缘预连接（preconnect/dns-prefetch）、ffmpeg 空闲预热、视频封面懒加载，不砍动效。
-
 ---
 
 ## 五·二、平台与解析说明
 
-- **抖音 / 快手 / 小红书 / TikTok**：采用**多源并行竞速**架构（`curl_multi` 同时向多个源发请求，谁先成功用谁），不再“等挂掉的源超时”。默认源为 `api.bugpk.com` 与开源 `api.douyin.wtf`；若配置了 `LOCAL_PARSER_URL`（你自己的解析服务），则**优先走本地第一方**，公共接口仅作兜底。失败源会被短期“负缓存”，进一步提速。全部失败时错误信息会列出已尝试的源，便于排查。
-- **Bilibili**：**服务端直连官方接口**（`api.bilibili.com` 的 `view` + `playurl`）解析，无需第三方，是 B站的“本地/第一方”主路。官方失败才回退并行尝试 本地解析器 + bugpk。返回音视频合一的直链，便于剪辑。
+- **抖音 / 快手 / 小红书 / TikTok**：走公共解析源（`api.codelife.cc` 为主，另含 `tenapi.cn` 等兜底）。多源依次尝试，任一处返回视频即成功；全部失败时错误信息会列出各源返回，便于排查。
+- **Bilibili**：**服务端直连官方接口**（`api.bilibili.com` 的 `view` + `playurl`）解析，无需第三方。返回音视频合一的直链，便于剪辑。
   - 要求你的主机能访问 `api.bilibili.com` 与 `bilivideo.com`（主流公共主机通常可以）。
   - 直链带时效（约 1 小时），请解析后尽快使用。
-  - **清晰度说明**：B 站对未登录（游客）请求，合流直链最高仅 **720P**，这是 B 站接口限制而非解析 Bug。解析前可在界面「清晰度」选择器选 自动 / 720P / 1080P / 4K（仅对 B站生效，其他平台自动忽略）；若需 **1080P / 4K**，在 `config.php` 的 `BILI_COOKIE` 填入你登录后复制的 `SESSDATA`（格式 `SESSDATA=xxxx`），官方接口即会按账号权限返回更高画质，且仍保持音视频合一；Cookie 失效或游客选高画质时会自动回退 720P 并提示。结果区会显示「官方直连 / 本地解析 / 第三方备用」来源徽标。
-
-> **彻底摆脱第三方依赖（推荐）**：第三方公共接口随时可能限流 / 关停（实测 `api.bugpk.com` 会返回 `429 满载`）。见 `cloudflare-worker/README.md`：部署一个 Cloudflare Worker（免费），它同时提供 **`/parse` 第一方解析**（B站官方直连 + 多源并行竞速 + 边缘缓存）与 **`/proxy` 视频代理**。把 Worker 的 `/parse` 地址填到 `config.php` 的 `LOCAL_PARSER_URL`，再把 Worker 地址填到前端 `const PROXY`，即可让解析与下载都走你自己的边缘节点。
 
 ---
 

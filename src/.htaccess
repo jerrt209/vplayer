@@ -2,22 +2,6 @@
 # 剪辑引擎改为「同源代理 ffmpeg_proxy.php」加载后，所有 ffmpeg 资源均为同源，
 # 无需跨域隔离；保留 COEP 反而会因 require-corp 拦截无 CORS 的视频源（如抖音）导致预览黑屏。
 
-# —— 下载加速：禁用 PHP 输出缓冲，否则 cURL → php://output 时会被 4KB 缓冲堆满才 flush，
-#     大文件下载会被切成无数 4KB 小段往返浏览器，延迟和丢包概率大增 ——
-<IfModule mod_php8.c>
-    php_value output_buffering 0
-</IfModule>
-<IfModule mod_php.c>
-    php_value output_buffering 0
-</IfModule>
-<IfModule mod_php7.c>
-    php_value output_buffering 0
-</IfModule>
-# —— 下载加速：禁用 gzip 压缩（视频流已是压缩格式，再压浪费 CPU 还拖慢流式）——
-<IfModule mod_deflate.c>
-    SetEnvIfNoCase Request_URI "(action=proxy_video|\.mp4$|\.m4a$)" no-gzip dont-vary
-</IfModule>
-
 # 缓存静态资源
 <FilesMatch "\.(js|css|png|jpg|svg|ico|wasm)$">
     Header set Cache-Control "public, max-age=86400"

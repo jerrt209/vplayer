@@ -2,21 +2,7 @@ name = "wm-proxy"
 main = "worker.js"
 compatibility_date = "2024-09-23"
 
-# 可选：把你自己部署的 douyin.wtf（或任意兼容 /?url= 的解析服务）地址填到这里，
-# 作为“本地第一方”解析源优先尝试，彻底摆脱对第三方公共接口的依赖。
-# 留空 '' 则只用公共源做并行竞速（仍比单源稳）。
-vars = { SELF_HOSTED = "" }
-
 # 免费方案即可（Workers Free）：每日 10 万次请求、流式转发不占内存。
 # 部署：先 `npx wrangler login`，再 `npx wrangler deploy`。
 # 部署成功后会得到地址：https://wm-proxy.<你的子域>.workers.dev
-#
-# 该 Worker 同时提供两个能力：
-#   1) /parse?url=<分享链接>   第一方解析（B站官方直连 + 多源并行竞速 + 边缘缓存）
-#   2) /proxy?url=<视频直链>&name=<文件名>   就近视频代理（下载/剪辑加速）
-#
-# 集成方式：
-#   - 前端加速下载/剪辑：把地址填到 index.html 顶部 const PROXY = 'https://wm-proxy.xxx.workers.dev'
-#   - 后端“本地化”解析：把地址 + /parse 填到 config.php 的 LOCAL_PARSER_URL，
-#     例如：define('LOCAL_PARSER_URL', 'https://wm-proxy.xxx.workers.dev/parse');
-#     系统解析时会优先走你自己的 Worker（第一方），公共接口仅作兜底。
+# 把该地址填到 index.html 顶部的 const PROXY = '...' 即可启用加速。

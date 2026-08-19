@@ -2,7 +2,7 @@
 /**
  * ============================================================
  *  去水印小程序 · 前端接口（wm_api.php）
- *  动作：check / login_url / logout / watermark / proxy_video / oauth_ping
+ *  动作：check / watermark / proxy_video
  * ============================================================
  */
 require_once __DIR__ . '/config.php';
@@ -20,6 +20,9 @@ if (!is_array($post)) {
 $post = array_merge($_POST, $post);
 $action = $post['action'] ?? ($_GET['action'] ?? '');
 
+// 会话里记录免费次数（保留字段，但已去除 OAuth 登录中心，不再限制）
+if (!isset($_SESSION['free_used'])) $_SESSION['free_used'] = 0;
+
 function api_ok($data)   { echo json_encode(array_merge(['success' => true], $data), JSON_UNESCAPED_UNICODE); }
 function api_err($msg, $extra = []) {
     echo json_encode(array_merge(['success' => false, 'msg' => $msg], $extra), JSON_UNESCAPED_UNICODE);
@@ -27,7 +30,7 @@ function api_err($msg, $extra = []) {
 
 switch ($action) {
 
-    // 查询登录态（已去除 OAuth 登录中心，固定返回未登录游客态，前端不再依赖）
+    // 查询登录态（已去除 OAuth 登录中心，固定返回游客态，前端不再依赖）
     case 'check':
         api_ok(['logged_in' => false, 'user' => null, 'free_left' => 0]);
         break;
@@ -40,20 +43,7 @@ switch ($action) {
             api_err('未能从输入中提取到有效链接，请粘贴分享链接或完整文案');
             break;
         }
-        $quality = trim($post['quality'] ?? 'auto');
-        // 短缓存：相同链接+画质 600s 内直接复用，降低对上游（尤其第三方）的调用压力与失败率
-        $cacheKey = 'wm_' . md5($url . '|' . $quality);
-        $cached   = cache_get($cacheKey);
-        if ($cached !== null) {
-            $result = $cached;
-        } else {
-            $result = proxy_parse($url, $quality);
-            if ($result['success']) {
-                // 剔除内部字段（_src 来源标记 / _rate 限流标记）再缓存与返回
-                foreach (['_src', '_rate'] as $k) unset($result[$k]);
-                cache_set($cacheKey, $result, 600);
-            }
-        }
+        $result = proxy_parse($url);
         if (!$result['success']) {
             api_err($result['msg']);
             break;
@@ -70,14 +60,7 @@ switch ($action) {
         $host = parse_url($u, PHP_URL_HOST) ?: '';
         $ok = false;
         foreach (PROXY_ALLOW as $allow) {
-            $q = preg_quote($allow, '/');
-            if (strpos($allow, '.') !== false) {
-                // 完整域名后缀：必须出现在主机末尾，且前方为边界（. 或开头），防 evilbilivideo.com 绕过
-                if (preg_match('/(?:^|\.)' . $q . '$/i', $host)) { $ok = true; break; }
-            } else {
-                // 关键词：须作为独立域名标签（前后为 . 或边界），防 xdouyin.com 之类绕过
-                if (preg_match('/(?:^|\.)' . $q . '(?:\.|$)/i', $host)) { $ok = true; break; }
-            }
+            if (stripos($host, $allow) !== false) { $ok = true; break; }
         }
         if (!$ok) { http_response_code(403); exit('host not allowed'); }
         // 透传前端指定的下载文件名（已 URL 编码），用于在响应头里要求浏览器“下载”而非播放
@@ -105,15 +88,7 @@ function extract_url_from_text($text) {
  */
 function referer_for_host($host) {
     $h = strtolower($host ?: '');
-    // B站 CDN 域名已迁移（bilivideo.com / bilivideo.cn / mountaintoys.cn 等），统一用 B站 Referer。
-    // 注意：`bilivideo` 不含 `bilibili` 子串，必须单独匹配，否则会 fallback 到错误的 https://<host> Referer，
-    // 而 B站 CDN 对错误 Referer 直接返回 403（下载失败根因之一）。
-    // 封面图床 hdslb.com / biliimg.com 同样有防盗链，也必须带 bilibili Referer（否则 403）。
-    if (strpos($h, 'bilibili')    !== false ||
-        strpos($h, 'bilivideo')   !== false ||
-        strpos($h, 'mountaintoys') !== false ||
-        strpos($h, 'hdslb')       !== false ||
-        strpos($h, 'biliimg')     !== false) return 'https://www.bilibili.com';
+    if (strpos($h, 'bilibili')   !== false) return 'https://www.bilibili.com';
     if (strpos($h, 'douyin')     !== false ||
         strpos($h, 'amemv')      !== false ||
         strpos($h, 'snssdk')     !== false ||
@@ -127,149 +102,80 @@ function referer_for_host($host) {
 }
 
 /**
- * 带 CORS 与 Range 支持的视频流代理（供浏览器 <video> 播放 + ffmpeg.wasm 读取跨域视频）。
- * 实现：先发一次 HEAD 探测响应头，再流式转发实体，避免把大文件载入内存。
- *
- * 性能说明：vplayer-base 的零拷贝版本（fopen('php://output') + CURLOPT_FILE），
- * cURL 把整块数据直接 pipe 给输出层，PHP 不参与字节搬运，
- * 不会有每 chunk 回调开销，速度比 WRITEFUNCTION 版通常快 2–4×。
- * 这里再加 CURLOPT_BUFFERSIZE=256KB 把 cURL 内部缓冲放大，再提升一档。
+ * 带 CORS 与 Range 支持的视频流代理（供 ffmpeg.wasm 在浏览器内读取跨域视频）。
+ * 先发一次 HEAD 探测响应头，再流式转发实体，避免把大文件载入内存。
  */
 function stream_proxy($url, $filename = '') {
-    // —— 下载加速：必须关 PHP 输出缓冲，否则 cURL → php://output 时
-    //     4KB 缓冲堆满才 flush，视频流被切成无数小段往返 ——
-    @ini_set('output_buffering', '0');
-    @ini_set('zlib.output_compression', '0');
-    while (ob_get_level() > 0) { @ob_end_clean(); }
-    @set_time_limit(0);
-
     $range = $_SERVER['HTTP_RANGE'] ?? '';
     $referer = referer_for_host(parse_url($url, PHP_URL_HOST) ?: '');
-    $baseHdrs = [
+    $hdrs  = [
         'Referer: ' . $referer,
         'Origin: '  . $referer,
         'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
     ];
-    $hdrs = $baseHdrs;
-    if ($range !== '') $hdrs[] = "Range: $range";
+    if ($range) $hdrs[] = "Range: $range";
 
-    // —— 文件名 RFC 5987 双段（保留中文） ——
-    $sendAscii = '';
-    $cleanForDisp = '';
-    if ($filename !== '') {
-        $clean = preg_replace('/[\x00-\x1f\x7f\/\\\\]/', '', $filename);
-        if (function_exists('mb_strlen')) {
-            if (mb_strlen($clean, 'UTF-8') > 80) $clean = mb_substr($clean, 0, 80, 'UTF-8');
-        } elseif (strlen($clean) > 120) {
-            $clean = substr($clean, 0, 120);
-        }
-        $cleanForDisp = $clean;
-        $sendAscii = preg_replace('/[^\x20-\x7e]/', '', $clean);
-        $sendAscii = trim($sendAscii, " \t\n\r\0\x0B.");
-        if ($sendAscii === '' || preg_match('/^\.[a-z0-9]{2,4}$/i', $sendAscii)) $sendAscii = 'video';
-        $ext = strtolower(pathinfo($clean, PATHINFO_EXTENSION));
-        $okExt = ['mp4','webm','mkv','flv','mov','m4v','avi','mp3','m4a','aac','wav','jpg','jpeg','png','webp','gif'];
-        if ($ext === '' || !in_array($ext, $okExt, true)) {
-            if (!preg_match('/\.[a-z0-9]{2,4}$/i', $sendAscii)) $sendAscii .= '.mp4';
-        }
-    }
-
-    // —— HEAD 探测：拿到 Content-Type + 资源总字节数（用于正确的 Content-Length / Content-Range / 416） ——
-    $ctype = 'application/octet-stream';
-    $total = null;        // 上游资源总字节数
-    $status = 200;
-    $chunkLen = null;     // 本次响应体字节数（Range 时=区间长度；否则=全文长度；未知则不设 Content-Length）
-    if (function_exists('curl_init')) {
-        $headCh = curl_init($url);
-        // bytes=0-0 探测：多数 CDN 回 206 + Content-Range，可拿到总大小（优于裸 HEAD 拿不到长度）
-        $headHdrs = array_merge($baseHdrs, ['Range: bytes=0-0']);
-        curl_setopt_array($headCh, [
-            CURLOPT_NOBODY => true, CURLOPT_HEADER => true,
-            CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_TIMEOUT => 6, CURLOPT_CONNECTTIMEOUT => 6,
-            CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_HTTPHEADER => $headHdrs,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-        ]);
-        $head = curl_exec($headCh);
-        curl_close($headCh);
-        if ($head) {
-            if (preg_match('/content-type:\s*([^\r\n]+)/i', $head, $m)) $ctype = trim($m[1]);
-            if (preg_match('/content-range:\s*bytes\s+\d+-\d+\/(\d+|\*)/i', $head, $m)) {
-                $total = ($m[1] === '*') ? null : (int)$m[1];
-            } elseif (preg_match('/content-length:\s*(\d+)/i', $head, $m)) {
-                $total = (int)$m[1];
-            }
-        }
-    }
-
-    // 解析客户端 Range → 正确响应状态 + Content-Range + Content-Length
-    // （否则浏览器/下载器拿不到长度，断流也无从察觉；分片 seek 也会错）
-    $contentRange = '';
-    if ($range !== '') {
-        $status = 206;
-        $from = $to = null;
-        if (preg_match('/bytes=(\d*)-(\d*)/i', $range, $rm)) {
-            $from = ($rm[1] === '') ? null : (int)$rm[1];
-            $to   = ($rm[2] === '') ? null : (int)$rm[2];
-        }
-        if ($from !== null && $total !== null && $from >= $total) {
-            header('Access-Control-Allow-Origin: *');
-            http_response_code(416);
-            header('Content-Type: ' . $ctype);
-            header('Content-Range: bytes */' . $total);
-            header('Content-Length: 0');
-            exit;
-        }
-        if ($from === null && $total !== null) $from = 0;
-        if ($to === null && $total !== null) $to = $total - 1;
-        if ($from !== null && $to !== null) {
-            $chunkLen = $to - $from + 1;
-            $contentRange = 'bytes ' . $from . '-' . $to . '/' . ($total !== null ? $total : '*');
-        }
-    } elseif ($total !== null) {
-        $chunkLen = $total;   // 全文已知大小 → 声明 Content-Length，CDN 断流即可被客户端察觉
-    }
-
-    // 响应头一次性写出去（cURL 直 stream 到 php://output 期间不能再 header()；注意先 status 再 Content-Range）
-    header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges');
-    header('Content-Type: ' . $ctype);
-    header('Accept-Ranges: bytes');
-    http_response_code($status);
-    if ($status === 206 && $contentRange !== '') header('Content-Range: ' . $contentRange);
-    if ($chunkLen !== null) header('Content-Length: ' . $chunkLen);
-    if ($sendAscii !== '') {
-        header('Content-Disposition: attachment; filename="' . $sendAscii . '"; filename*=UTF-8\'\'' . rawurlencode($cleanForDisp));
-    }
-
-    // —— 零拷贝流式转发：cURL 直接 pipe 到 php://output ——
-    $out = fopen('php://output', 'wb');
-    if ($out === false) { http_response_code(500); exit('open output failed'); }
-
+    // 1) 探测响应头
     $ch = curl_init($url);
     curl_setopt_array($ch, [
-        CURLOPT_FILE => $out,
-        CURLOPT_HEADER => false,
+        CURLOPT_NOBODY         => true,
+        CURLOPT_HEADER         => true,
+        CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_TIMEOUT => 600,
+        CURLOPT_TIMEOUT        => 30,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => 0,
+        CURLOPT_HTTPHEADER     => $hdrs,
+    ]);
+    $head = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $ctype = 'application/octet-stream';
+    $clen  = null;
+    $crange = null;
+    $accept = 'bytes';
+    foreach (explode("\r\n", $head ?: '') as $line) {
+        $lk = strtolower($line);
+        if (preg_match('/content-type:\s*(.+)/i', $line, $m))      $ctype = trim($m[1]);
+        if (preg_match('/content-length:\s*(\d+)/i', $line, $m))   $clen  = (int)$m[1];
+        if (preg_match('/content-range:\s*(.+)/i', $line, $m))     $crange = trim($m[1]);
+        if (preg_match('/accept-ranges:\s*(.+)/i', $line, $m))     $accept = trim($m[1]);
+    }
+
+    @set_time_limit(0);
+    header('Access-Control-Allow-Origin: *');
+    header("Content-Type: $ctype");
+    header("Accept-Ranges: $accept");
+    // 指定了文件名时，要求浏览器“另存为下载”而非直接播放（同源代理 + 该头 = 可靠触发下载）
+    if ($filename !== '') {
+        $filename = preg_replace('/[\x00-\x1f\/\\\\]/', '', $filename) ?: 'video.mp4';
+        header('Content-Disposition: attachment; filename="' . $filename . '"; filename*=UTF-8\'\'' . rawurlencode($filename));
+    }
+    if ($range && $code == 206 && $crange !== null) {
+        header('HTTP/1.1 206 Partial Content');
+        header("Content-Range: $crange");
+        if ($clen !== null) header("Content-Length: $clen");
+        http_response_code(206);
+    } elseif ($clen !== null) {
+        header("Content-Length: $clen");
+    }
+
+    // 2) 流式转发实体
+    $out = fopen('php://output', 'wb');
+    $ch2 = curl_init($url);
+    curl_setopt_array($ch2, [
+        CURLOPT_FILE           => $out,
+        CURLOPT_HEADER         => false,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT        => 600,
         CURLOPT_CONNECTTIMEOUT => 30,
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_SSL_VERIFYHOST => 0,
-        CURLOPT_HTTPHEADER => $hdrs,
-        CURLOPT_BUFFERSIZE => 256 * 1024,
-        CURLOPT_TCP_NODELAY => true,
-        CURLOPT_ENCODING => '',
+        CURLOPT_HTTPHEADER     => $hdrs,
     ]);
-    curl_exec($ch);
-    $derr = curl_errno($ch);           // 断流检测：上游在 Content-Length 前断开（如某些节点只发 moov 就断）
-    curl_close($ch);
-    if ($derr === 18) {
-        // CURLE_PARTIAL_FILE——CDN 半路断开。响应头已发出，Body 已截断，
-        // 但 Content-Length 已声明，客户端能立刻察觉断流并可用 Range 续传。
-        @error_log('stream_proxy partial-file(upstream disconnect) url=' . substr($url, 0, 140));
-    }
-    @fflush($out);
-    @fclose($out);
+    curl_exec($ch2);
+    curl_close($ch2);
+    fclose($out);
     exit;
 }

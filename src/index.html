@@ -4,26 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>去水印工具 · 短视频解析</title>
-<!-- 在首帧绘制前确定主题，避免闪烁，并保证 data-theme 始终显式存在 -->
-<script>
-(function(){try{
-  var t=localStorage.getItem('wm_theme');
-  if(!t){ t = (window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark'; }
-  document.documentElement.setAttribute('data-theme', t==='light'?'light':'dark');
-}catch(e){ document.documentElement.setAttribute('data-theme','dark'); }})();
-</script>
-<!-- 提前与解析/播放源站建立连接，缩短首次解析与预览延迟 -->
-<link rel="preconnect" href="https://api.bilibili.com" crossorigin>
-<link rel="preconnect" href="https://bilivideo.com" crossorigin>
-<link rel="preconnect" href="https://*.bilivideo.com" crossorigin>
-<link rel="dns-prefetch" href="https://api.bugpk.com">
-<link rel="dns-prefetch" href="https://api.douyin.wtf">
-<link rel="dns-prefetch" href="https://www.douyin.com">
-<link rel="dns-prefetch" href="https://v.douyin.com">
-<link rel="dns-prefetch" href="https://www.kuaishou.com">
-<link rel="dns-prefetch" href="https://www.xiaohongshu.com">
-<link rel="preconnect" href="https://gcore.jsdelivr.net" crossorigin>
-<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <style>
 :root{
   --bg:#000;
@@ -38,8 +18,6 @@
   --border:rgba(255,255,255,0.10);
   --grad:linear-gradient(135deg,#8b6cf0,#ff7eb3);
   --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
-  /* 让原生控件（select 下拉列表、滚动条等）按深色主题渲染，避免白字白底看不清 */
-  color-scheme:dark;
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 html,body{height:100%;}
@@ -52,21 +30,18 @@ body{
   overflow-x:hidden;
   position:relative;
 }
-/* 背景：静态预渲染光斑（去掉 filter:blur 实时模糊 + 无限位移动画，彻底消除 GPU 卡顿）
-   视觉上用径向渐变模拟柔和光斑，零每帧重算开销 */
+/* 背景：克制的流动光斑（非花哨） */
 .bg-orbs{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;}
-.bg-orbs span{position:absolute;border-radius:50%;opacity:.28;}
-.bg-orbs .o1{
-  width:380px;height:380px;left:-80px;top:-60px;
-  background:radial-gradient(circle at 50% 50%, rgba(91,108,240,.9) 0%, rgba(91,108,240,.35) 45%, transparent 70%);
+.bg-orbs span{
+  position:absolute;border-radius:50%;filter:blur(80px);opacity:.28;
+  animation:drift 22s ease-in-out infinite alternate;
 }
-.bg-orbs .o2{
-  width:320px;height:320px;right:-60px;top:30%;
-  background:radial-gradient(circle at 50% 50%, rgba(139,108,240,.85) 0%, rgba(139,108,240,.3) 45%, transparent 70%);
-}
-.bg-orbs .o3{
-  width:300px;height:300px;left:30%;bottom:-80px;opacity:.18;
-  background:radial-gradient(circle at 50% 50%, rgba(10,157,110,.85) 0%, rgba(10,157,110,.3) 45%, transparent 70%);
+.bg-orbs .o1{width:380px;height:380px;left:-80px;top:-60px;background:#5b6cf0;}
+.bg-orbs .o2{width:320px;height:320px;right:-60px;top:30%;background:#8b6cf0;animation-delay:-7s;}
+.bg-orbs .o3{width:300px;height:300px;left:30%;bottom:-80px;background:#0a9d6e;opacity:.18;animation-delay:-13s;}
+@keyframes drift{
+  0%{transform:translate(0,0) scale(1);}
+  100%{transform:translate(40px,30px) scale(1.12);}
 }
 
 .app{position:relative;z-index:1;max-width:460px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;padding:0 16px 28px;}
@@ -94,19 +69,24 @@ body{
   display:flex;align-items:center;justify-content:center;font-size:15px;
 }
 
-/* 液态玻璃卡片（静态版）：去掉 backdrop-filter 实时模糊与动态高光动画，
-   改用半透明纯色 + 静态高光渐变，视觉接近但零每帧模糊开销，避免低端设备卡死 */
+/* 液态玻璃卡片 + 动态高光 */
 .glass{
   position:relative;overflow:hidden;
   background:var(--card);
+  backdrop-filter:blur(20px) saturate(160%);
+  -webkit-backdrop-filter:blur(20px) saturate(160%);
   border:1px solid var(--border);
   border-radius:22px;
   box-shadow:0 18px 50px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.10);
 }
 .glass::before{
   content:'';position:absolute;top:-60%;left:-60%;width:220%;height:220%;
-  background:radial-gradient(circle at 30% 30%, rgba(255,255,255,.12) 0%, transparent 55%);
-  pointer-events:none;z-index:0;
+  background:radial-gradient(circle, rgba(255,255,255,.16) 0%, transparent 55%);
+  animation:glass-light 6s ease-in-out infinite alternate;pointer-events:none;z-index:0;
+}
+@keyframes glass-light{
+  0%{transform:translate(-25%,-25%) rotate(0deg);}
+  100%{transform:translate(30%,25%) rotate(40deg);}
 }
 .glass > *{position:relative;z-index:1;}
 
@@ -130,44 +110,20 @@ body{
 }
 .btn-primary{background:var(--blue);color:#fff;position:relative;overflow:hidden;}
 .btn-primary:active{background:var(--blue-press);}
+.btn-primary::after{
+  content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;
+  background:radial-gradient(circle, rgba(255,255,255,.35) 0%, transparent 55%);
+  animation:glass-light 4.5s ease-in-out infinite alternate;pointer-events:none;
+}
 .btn-outline{background:rgba(255,255,255,.06);color:var(--text);border:1px solid var(--border);}
 .btn-outline:active{background:rgba(255,255,255,.14);}
 .btn:disabled{opacity:.55;cursor:not-allowed;}
 
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
 .chip{
-  font-size:12px;color:var(--text2);background:rgba(255,255,255,.06);
-  border:1px solid var(--border);padding:6px 11px;border-radius:20px;
+  font-size:11px;color:var(--text2);background:rgba(255,255,255,.06);
+  border:1px solid var(--border);padding:5px 10px;border-radius:20px;
 }
-
-/* 清晰度选择器（B站可选；仅影响解析请求，其余平台自动忽略） */
-.quality-row{
-  display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:12px;
-  font-size:12px;color:var(--text2);
-}
-.quality-row label{font-weight:600;color:var(--text);}
-.quality-select{
-  appearance:none;-webkit-appearance:none;cursor:pointer;
-  font-size:13px;font-weight:600;color:var(--text);
-  background-color:var(--card-solid,#1c1c1e);
-  border:1px solid var(--border);
-  padding:7px 28px 7px 12px;border-radius:10px;
-  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1a6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
-  background-repeat:no-repeat;background-position:right 10px center;
-  transition:border-color .2s,background-color .2s;
-  color-scheme:dark;
-}
-.quality-select:hover{border-color:var(--text3);}
-.quality-select:focus{outline:none;border-color:var(--accent,#0a84ff);}
-/* 关键修复：给下拉弹层里的 option 强制深色实底 + 浅色文字，
-   避免 appearance:none 后原生下拉列表继承透明/白底导致“白字白底看不清” */
-.quality-select option{
-  background-color:#1c1c1e;
-  color:#fff;
-  font-size:13px;
-  font-weight:500;
-}
-.quality-hint{font-size:11px;color:var(--text3);line-height:1.4;}
 
 /* 提示横幅（未登录免费次数提示） */
 .notice{
@@ -185,66 +141,9 @@ body{
   width:100%;border-radius:14px;background:#000;display:block;margin-bottom:12px;max-height:380px;
 }
 .result .meta{font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5;word-break:break-all;}
-/* 解析来源徽标：官方直连 / 第三方备用 */
-.src-badge{
-  display:inline-flex;align-items:center;gap:5px;vertical-align:middle;
-  font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;margin-left:6px;
-  border:1px solid var(--border);
-}
-.src-badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;}
-.src-badge.official{color:#5fd38a;background:rgba(40,167,69,.10);border-color:rgba(40,167,69,.30);}
-.src-badge.thirdparty{color:#ffc777;background:rgba(255,167,38,.10);border-color:rgba(255,167,38,.28);}
-.quality-note{margin-top:8px;font-size:11.5px;color:#ffc777;line-height:1.5;}
 .result .meta b{color:var(--text);}
 .dl-row{display:flex;gap:10px;}
 .dl-row .btn{flex:1;}
-
-/* 工具行（批量 / 历史 / 主题） + 平台实时识别 */
-.tools{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
-.tool-btn{
-  flex:1;min-width:84px;padding:9px 10px;border-radius:12px;border:1px solid var(--border);
-  background:rgba(255,255,255,.05);color:var(--text2);font-size:13px;cursor:pointer;font-family:inherit;
-  transition:all .15s;
-}
-.tool-btn:hover{border-color:var(--blue);color:var(--text);}
-.tool-btn.active{background:var(--blue);border-color:var(--blue);color:#fff;}
-.detect-chip{display:none;align-items:center;gap:6px;margin-top:10px;font-size:12px;color:var(--text2);}
-.detect-chip .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-
-/* 批量解析区 */
-#batch-area{margin-top:16px;}
-textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inherit;line-height:1.55;padding:12px 14px;}
-.batch-results{margin-top:14px;display:flex;flex-direction:column;gap:8px;}
-.batch-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid var(--border);}
-.batch-item.err{background:rgba(255,69,58,.08);border-color:rgba(255,69,58,.25);}
-.batch-item .bi-info{flex:1;min-width:0;font-size:12.5px;line-height:1.4;}
-.batch-item .bi-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.batch-item .bi-err{color:#ffb3c1;font-size:12px;margin-top:3px;}
-.bi-actions{display:flex;gap:6px;flex-shrink:0;}
-.bi-btn{display:inline-flex;align-items:center;justify-content:center;padding:9px 14px;border-radius:11px;border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--text);font-size:13px;font-weight:600;text-decoration:none;cursor:pointer;font-family:inherit;}
-.bi-btn:hover{background:rgba(255,255,255,.12);}
-
-/* 历史记录面板 */
-.history-panel{margin-top:14px;padding:14px;border-radius:16px;background:var(--card);border:1px solid var(--border);}
-.history-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
-.history-head span{font-weight:700;font-size:14px;}
-.history-head button{background:none;border:none;color:var(--blue);font-size:12px;cursor:pointer;font-family:inherit;}
-.history-list{display:flex;flex-direction:column;gap:8px;max-height:340px;overflow:auto;}
-.history-item{display:flex;align-items:center;gap:10px;padding:8px;border-radius:12px;background:rgba(255,255,255,.04);}
-.history-item .hi-thumb{width:46px;height:46px;border-radius:8px;background-size:cover;background-position:center;background-color:var(--border);flex-shrink:0;}
-.history-item .hi-info{flex:1;min-width:0;}
-.history-item .hi-title{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.history-item .hi-meta{font-size:11px;color:var(--text2);margin-top:2px;}
-.history-empty{font-size:12px;color:var(--text2);text-align:center;padding:14px;}
-
-/* 本地解析徽标（蓝色，区别于官方绿 / 第三方橙） */
-.src-badge.local{color:#5ac8fa;background:rgba(90,200,250,.10);border-color:rgba(90,200,250,.30);}
-
-/* 平台品牌 SVG 图标（与文字基线对齐，不挤压） */
-.plat-ico{display:inline-block;vertical-align:-2px;flex-shrink:0;margin-right:5px;}
-.chip{display:inline-flex;align-items:center;}
-.detect-chip .plat-ico{margin-right:4px;}
-.batch-item .plat-ico,.history-item .plat-ico{margin-right:0;}
 
 /* 在线分段剪辑（ffmpeg.wasm） */
 .trim{margin-top:16px;padding-top:16px;border-top:1px solid var(--border);}
@@ -344,9 +243,10 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
 .dl-item .dl-size{color:var(--text2);flex:0 0 auto;font-weight:400;}
 .dl-all{margin-top:4px;align-self:flex-start;}
 
-/* 遮罩 / 弹窗（供解析加载、下载加载、剪辑加载、速度确认等模态复用） */
+/* 弹窗（仿爱豆模拟器登录弹窗） */
 .overlay{
-  position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.65);
+  position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.55);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
   display:flex;align-items:center;justify-content:center;padding:20px;
 }
 .overlay.hidden{display:none;}
@@ -381,7 +281,8 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
 /* 开发者信息卡片 */
 .dev-card{
   margin-top:20px;padding:22px 20px;border-radius:18px;
-  background:var(--card);
+  background:var(--card);backdrop-filter:blur(16px) saturate(140%);
+  -webkit-backdrop-filter:blur(16px) saturate(140%);
   border:1px solid var(--border);display:flex;flex-direction:column;align-items:center;
   gap:12px;text-align:center;position:relative;overflow:hidden;
 }
@@ -414,40 +315,6 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
 .dev-links a:hover{background:rgba(255,255,255,.12);color:var(--text);}
 .dev-links a.gitee:hover{border-color:#c71d23;color:#c71d23;}
 .dev-links a svg{width:16px;height:16px;opacity:.85;}
-
-/* 开源协议卡片 */
-.license-card{
-  margin-top:16px;padding:18px 20px;border-radius:16px;
-  background:var(--card);border:1px solid var(--border);position:relative;overflow:hidden;
-}
-.license-card::before{
-  content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;
-  background:radial-gradient(circle, rgba(255,255,255,.06) 0%, transparent 60%);
-  pointer-events:none;z-index:0;
-}
-.license-card > *{position:relative;z-index:1;}
-.license-title{
-  font-size:13px;font-weight:700;color:var(--text);letter-spacing:.3px;
-  display:flex;align-items:center;justify-content:center;gap:7px;margin-bottom:12px;
-}
-.license-title svg{width:15px;height:15px;opacity:.8;}
-.license-list{display:flex;flex-direction:column;gap:8px;}
-.license-item{
-  display:flex;align-items:flex-start;gap:9px;text-align:left;
-  font-size:11.5px;color:var(--text2);line-height:1.5;
-}
-.license-item .lic-dot{
-  flex-shrink:0;width:4px;height:4px;border-radius:50%;
-  background:var(--blue);margin-top:6px;
-}
-.license-item b{color:var(--text);font-weight:600;}
-.license-item a{color:var(--blue);text-decoration:none;font-weight:600;}
-.license-item a:hover{text-decoration:underline;}
-.license-item .lic-tag{
-  display:inline-block;padding:1px 7px;border-radius:6px;margin-left:4px;
-  font-size:10px;font-weight:700;background:rgba(10,132,255,.14);
-  color:var(--blue);border:1px solid rgba(10,132,255,.28);white-space:nowrap;
-}
 .footer{margin-top:auto;padding-top:16px;text-align:center;color:var(--text3);font-size:10.5px;line-height:1.5;}
 .footer a{color:var(--text2);text-decoration:none;}
 
@@ -560,61 +427,33 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
     animation-duration:.01ms!important;
     transition-duration:.01ms!important;
   }
+  .bg-orbs span{animation:none;}
+  .glass::before{animation:none;}
   .star-think{animation:none;}
   .think-dots span{animation:none;}
 }
 
-/* 浅色模式：跟随系统（仅当用户尚未手动选择，即尚无 data-theme 属性时生效）
-   一旦用户手动切换，显式的 data-theme 会覆盖此处，深色选择不会被浅色系统强制改写 */
+/* 浅色模式回退 */
 @media(prefers-color-scheme:light){
-  :root:not([data-theme]){
+  :root:not([data-theme="dark"]){
     --bg:#f5f5f7;--card:rgba(255,255,255,.72);--card-solid:#fff;
     --text:#1d1d1f;--text2:#6e6e73;--text3:#aeaeb2;
     --border:rgba(0,0,0,.08);--blue:#007aff;--blue-press:#0056b3;--green:#28a745;
     --grad:linear-gradient(135deg,#5856d6,#ff2d55);
   }
-  :root:not([data-theme]) .bg-orbs span{opacity:.12;}
-  :root:not([data-theme]) .toast{background:rgba(255,255,255,.95);color:#1d1d1f;}
-  :root:not([data-theme]) .parse-card,:root:not([data-theme]) .modal{background:#fff;}
-  :root:not([data-theme]) .input-glass{background:rgba(0,0,0,.03);color:#1d1d1f;}
-  :root:not([data-theme]) .input-glass::placeholder{color:#aeaeb2;}
-  :root:not([data-theme]) .seg-row input{background:rgba(0,0,0,.03);color:#1d1d1f;}
-  :root:not([data-theme]) .speed-btns button{background:rgba(0,0,0,.04);color:#6e6e73;}
-  :root:not([data-theme]) .speed-btns button.active{background:var(--blue);color:#fff;}
-  :root:not([data-theme]) .dl-item{background:rgba(0,0,0,.04);color:#1d1d1f;border-color:rgba(0,0,0,.08);}
-  :root:not([data-theme]) .notice{background:rgba(0,122,255,.08);border-color:rgba(0,122,255,.25);color:#007aff;}
-  :root:not([data-theme]) .direct-dl{background:rgba(0,122,255,.07);border-color:rgba(0,122,255,.25);}
-  :root:not([data-theme]) .dev-card{background:var(--card-solid);border-color:var(--border);}
-  :root:not([data-theme]) .license-card{background:var(--card-solid);border-color:var(--border);}
-  :root:not([data-theme]) .quality-select{background-color:#fff;color:#1d1d1f;border-color:rgba(0,0,0,.15);color-scheme:light;}
-  :root:not([data-theme]) .quality-select option{background-color:#fff;color:#1d1d1f;}
+  .bg-orbs span{opacity:.12;}
+  .toast{background:rgba(255,255,255,.95);color:#1d1d1f;}
+  .parse-card,.modal{background:#fff;}
+  .input-glass{background:rgba(0,0,0,.03);color:#1d1d1f;}
+  .input-glass::placeholder{color:#aeaeb2;}
+  .seg-row input{background:rgba(0,0,0,.03);color:#1d1d1f;}
+  .speed-btns button{background:rgba(0,0,0,.04);color:#6e6e73;}
+  .speed-btns button.active{background:var(--blue);color:#fff;}
+  .dl-item{background:rgba(0,0,0,.04);color:#1d1d1f;border-color:rgba(0,0,0,.08);}
+  .notice{background:rgba(0,122,255,.08);border-color:rgba(0,122,255,.25);color:#007aff;}
+  .direct-dl{background:rgba(0,122,255,.07);border-color:rgba(0,122,255,.25);}
+  .dev-card{background:var(--card-solid);border-color:var(--border);}
 }
-
-/* 手动浅色模式（点击“浅色模式”按钮，独立于系统偏好） */
-:root[data-theme="light"]{
-  --bg:#f5f5f7;--card:rgba(255,255,255,.72);--card-solid:#fff;
-  --text:#1d1d1f;--text2:#6e6e73;--text3:#aeaeb2;
-  --border:rgba(0,0,0,.08);--blue:#007aff;--blue-press:#0056b3;--green:#28a745;
-  --grad:linear-gradient(135deg,#5856d6,#ff2d55);
-}
-:root[data-theme="light"] .bg-orbs span{opacity:.12;}
-:root[data-theme="light"] .toast{background:rgba(255,255,255,.95);color:#1d1d1f;}
-:root[data-theme="light"] .parse-card,:root[data-theme="light"] .modal{background:#fff;}
-:root[data-theme="light"] .input-glass{background:rgba(0,0,0,.03);color:#1d1d1f;}
-:root[data-theme="light"] .input-glass::placeholder{color:#aeaeb2;}
-:root[data-theme="light"] .seg-row input{background:rgba(0,0,0,.03);color:#1d1d1f;}
-:root[data-theme="light"] .speed-btns button{background:rgba(0,0,0,.04);color:#6e6e73;}
-:root[data-theme="light"] .speed-btns button.active{background:var(--blue);color:#fff;}
-:root[data-theme="light"] .dl-item{background:rgba(0,0,0,.04);color:#1d1d1f;border-color:rgba(0,0,0,.08);}
-:root[data-theme="light"] .notice{background:rgba(0,122,255,.08);border-color:rgba(0,122,255,.25);color:#007aff;}
-:root[data-theme="light"] .direct-dl{background:rgba(0,122,255,.07);border-color:rgba(0,122,255,.25);}
-:root[data-theme="light"] .dev-card{background:var(--card-solid);border-color:var(--border);}
-:root[data-theme="light"] .license-card{background:var(--card-solid);border-color:var(--border);}
-:root[data-theme="light"] .history-panel,:root[data-theme="light"] .batch-item{background:rgba(255,255,255,.6);}
-:root[data-theme="light"] .tool-btn{background:rgba(0,0,0,.03);color:#6e6e73;}
-:root[data-theme="light"] .bi-btn{background:rgba(0,0,0,.03);color:#1d1d1f;}
-:root[data-theme="light"] .quality-select{background-color:#fff;color:#1d1d1f;border-color:rgba(0,0,0,.15);color-scheme:light;}
-:root[data-theme="light"] .quality-select option{background-color:#fff;color:#1d1d1f;}
 
 /* 打印样式 */
 @media print{
@@ -630,9 +469,10 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
 /* Toast */
 .toast{
   position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(20px);
-  background:rgba(30,30,32,.96);border:1px solid var(--border);color:#fff;
+  background:rgba(30,30,32,.95);border:1px solid var(--border);color:#fff;
   padding:11px 18px;border-radius:14px;font-size:13px;z-index:80;opacity:0;
   transition:opacity .25s,transform .25s;pointer-events:none;max-width:88%;text-align:center;
+  backdrop-filter:blur(10px);
 }
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 .toast.error{border-color:rgba(255,69,58,.5);}
@@ -656,6 +496,7 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
 }
 .star-think{
   animation:star-spin 2.4s linear infinite;
+  filter:drop-shadow(0 0 14px rgba(10,132,255,.65));
 }
 @keyframes star-spin{
   0%{transform:rotate(0) scale(1);}
@@ -688,55 +529,29 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
         <div class="brand-sub">短视频解析 · 免费无门槛</div>
       </div>
     </div>
-    <div class="top-actions" id="top-actions">
-    </div>
   </div>
 
   <div class="glass hero">
     <h1>一键提取短视频去水印</h1>
-    <p>粘贴抖音 / 快手 / 小红书 / Bilibili 等平台分享链接或整段文案，自动提取并解析无水印原片，免费无门槛使用。</p>
+    <p>粘贴抖音 / 快手 / 小红书 / Bilibili 等平台分享链接或整段文案，自动提取并解析无水印原片。免费无门槛使用。</p>
 
-    <div id="single-area">
-      <div class="input-wrap">
-        <input class="input-glass" id="url-input" placeholder="粘贴视频分享链接，如 https://v.douyin.com/xxxx/" autocomplete="off">
-        <button class="btn btn-primary" id="extract-btn" onclick="onExtract()">
-          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-          提取去水印
-        </button>
-      </div>
-
-      <div class="quality-row" id="quality-row">
-        <label for="quality">清晰度</label>
-        <select id="quality" class="quality-select">
-          <option value="auto">自动（推荐）</option>
-          <option value="720">720P 标准</option>
-          <option value="1080">1080P 高清</option>
-          <option value="4k">4K 原画</option>
-        </select>
-        <span class="quality-hint" id="quality-hint">B站可选；1080P/4K 需后台配置登录 Cookie</span>
-      </div>
-
-      <div class="detect-chip" id="detect-chip"></div>
-
-      <div class="tools">
-        <button type="button" class="tool-btn" id="toggle-batch">批量解析</button>
-        <button type="button" class="tool-btn" id="toggle-history">历史记录</button>
-        <button type="button" class="tool-btn" id="toggle-theme">浅色模式</button>
-      </div>
+    <div class="input-wrap">
+      <input class="input-glass" id="url-input" placeholder="粘贴视频分享链接，如 https://v.douyin.com/xxxx/" autocomplete="off">
+      <button class="btn btn-primary" id="extract-btn" onclick="onExtract()">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        提取去水印
+      </button>
     </div>
 
-    <div id="batch-area" class="hidden">
-      <textarea id="batch-input" class="input-glass" rows="5" placeholder="每行一个链接，可粘贴整段文案（每行自动提取第一个链接）"></textarea>
-      <button class="btn btn-primary" id="batch-btn" style="margin-top:12px;">批量解析去水印</button>
-      <div id="batch-results" class="batch-results"></div>
+    <div class="chips">
+      <span class="chip">抖音</span><span class="chip">TikTok</span>
+      <span class="chip">快手</span><span class="chip">小红书</span><span class="chip">Bilibili</span>
     </div>
 
-    <div class="history-panel hidden" id="history-panel">
-      <div class="history-head"><span>历史记录</span><button type="button" id="history-clear">清空</button></div>
-      <div id="history-list" class="history-list"></div>
+    <div class="notice" id="free-notice">
+      <svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="10" stroke="#7ec8ff" stroke-width="2" fill="none"></circle><path d="M12 8v5M12 16h.01" stroke="#7ec8ff" stroke-width="2" fill="none" stroke-linecap="round"></path></svg>
+      <span id="free-notice-text">免费使用 · 不限次数</span>
     </div>
-
-    <div class="chips" id="chips"></div>
   </div>
 
   <div class="glass result hidden" id="result">
@@ -745,7 +560,6 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
     <div class="dl-row">
       <a class="btn btn-primary" id="dl-video" href="#" download="" style="text-decoration:none;">下载视频</a>
       <a class="btn btn-outline" id="dl-music" href="#" download="" style="text-decoration:none;display:none;">下载音乐</a>
-      <button type="button" class="btn btn-outline" id="copy-link" style="text-decoration:none;display:none;">复制链接</button>
     </div>
 
     <!-- 在线分段剪辑 -->
@@ -754,7 +568,7 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
         在线分段剪辑
       </h3>
-      <p class="hint">可剪辑 2–3 段后一起下载，文件名自动编号为「视频名_1 / _2 / _3」。剪辑在浏览器本地完成，无需上传，免费无门槛。</p>
+      <p class="hint">可剪辑 2–3 段后一起下载，文件名自动编号为「视频名_1 / _2 / _3」。剪辑在浏览器本地完成，无需上传。</p>
       <div class="seg-total" id="segTotal">视频总时长：<b>——</b></div>
       <div class="seg-list" id="segList">
         <div class="seg-block" data-idx="1">
@@ -805,7 +619,7 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
 
   <!-- 开发者信息 -->
   <div class="dev-card">
-    <img class="dev-avatar" src="dev-avatar.jpg" alt="开发者头像" loading="lazy" onerror="this.style.display='none'">
+    <img class="dev-avatar" src="dev-avatar.jpg" alt="开发者头像" onerror="this.style.display='none'">
     <div class="dev-info">
       <div class="dev-name">Jerrt</div>
       <div class="dev-bio">
@@ -825,40 +639,8 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
     </div>
   </div>
 
-  <!-- 开源协议卡片 -->
-  <div class="license-card">
-    <div class="license-title">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7 7 .5-5 5 1.5 7L12 18l-6.5 3.5L7 14.5l-5-5 7-.5z"/></svg>
-      开源协议
-    </div>
-    <div class="license-list">
-      <div class="license-item">
-        <span class="lic-dot"></span>
-        <span><b>ffmpeg.wasm</b>（@ffmpeg/ffmpeg、@ffmpeg/core、@ffmpeg/util）<span class="lic-tag">MIT</span> — 浏览器端音视频处理引擎，底层 FFmpeg 遵循 <a href="https://www.gnu.org/licenses/lgpl-2.1.html" target="_blank" rel="noopener">LGPL 2.1+</a>。</span>
-      </div>
-      <div class="license-item">
-        <span class="lic-dot"></span>
-        <span><b>Simple Icons</b><span class="lic-tag">CC0 1.0</span> — 各平台品牌 SVG 图标，可自由使用。</span>
-      </div>
-      <div class="license-item">
-        <span class="lic-dot"></span>
-        <span><b>PHP</b><span class="lic-tag">PHP License 3.01</span> — 后端服务运行环境（BSD 风格许可证）。</span>
-      </div>
-      <div class="license-item">
-        <span class="lic-dot"></span>
-        <span><b>AES-128-CBC</b> — WAF 反爬挑战解密（算法公开标准，无附加授权限制）。</span>
-      </div>
-      <div class="license-item">
-        <span class="lic-dot"></span>
-        <span>静态资源经 <b>jsDelivr</b> / <b>unpkg</b> 开源 CDN 分发（均为开源项目托管平台）。</span>
-      </div>
-    </div>
-  </div>
-
   <div class="footer">
-    <div class="contrib">
-      <span>© 2026 <b>去水印工具</b> · 免费无门槛使用</span>
-    </div>
+    免费无门槛使用 · 无需登录
   </div>
 </div>
 
@@ -873,14 +655,14 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
   </div>
 </div>
 
-<!-- 下载加载动画（蓝色）：获取下载链接期间显示，含下载进度条 -->
+<!-- 下载加载动画（蓝色）：获取下载链接期间显示 -->
 <div class="overlay hidden" id="dl-loading">
   <div class="parse-card">
     <div class="star-think">
       <svg viewBox="0 0 24 24" width="46" height="46" fill="#0a84ff"><path d="M12 2l2.9 6.1 6.6.9-4.8 4.6 1.2 6.6L12 18.6 6.1 21.8l1.2-6.6L2.5 9l6.6-.9z"/></svg>
     </div>
     <div class="think-dots"><span></span><span></span><span></span></div>
-    <div class="think-text" id="dl-loading-text">正在努力获取下载链接…</div>
+    <div class="think-text">正在努力获取下载链接…</div>
   </div>
 </div>
 
@@ -920,32 +702,25 @@ textarea.input-glass{width:100%;resize:vertical;min-height:104px;font-family:inh
 <div class="toast error" id="toast">网络连接异常</div>
 
 <script>
-/* ===== 后端接口配置 ===== */
+/* ===== 后端接口配置（与已部署的 wm_api.php / wm_callback.php 一致） ===== */
 const API = 'wm_api.php';
-// 视频代理地址：留空 = 用本站 PHP 代理（proxy_video），仅供「直连失败时」兜底；
-// 部署 Cloudflare Worker 后填其地址（如 https://wm-proxy.xxx.workers.dev）即可就近加速剪辑。
+// 视频代理地址：留空 = 用本站 PHP 代理（proxy_video）；
+// 部署 Cloudflare Worker 后填其地址（如 https://wm-proxy.xxx.workers.dev）即可就近加速下载与剪辑。
 const PROXY = '';
-
-let STATE = { user: null, loggedIn: false, videoUrl: '', duration: 0, freeLeft: 0 };
+let STATE = { user: null, loggedIn: false, videoUrl: '', duration: 0, freeLeft: Infinity };
 
 /* ===== 基础请求 ===== */
-async function api(action, data = {}, opts = {}) {
-  const timeoutMs = opts.timeout ?? 12000;
-  const ctrl = new AbortController();
-  const tid = setTimeout(() => ctrl.abort(), timeoutMs);
+async function api(action, data = {}) {
   try {
     const r = await fetch(API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(Object.assign({ action }, data)),
-      signal: ctrl.signal
+      body: JSON.stringify(Object.assign({ action }, data))
     });
     const text = await r.text();
     try { return JSON.parse(text); } catch (e) { return { success: false, msg: '返回格式异常' }; }
   } catch (e) {
     return { success: false, msg: '网络连接异常' };
-  } finally {
-    clearTimeout(tid);
   }
 }
 
@@ -966,16 +741,7 @@ function proxyVideoUrl(url) {
 function dlUrl(url, name) {
   return proxyVideoUrl(url) + '&name=' + encodeURIComponent(name);
 }
-/* 下载加载提示：点击下载到链接就绪之间显示「正在努力获取下载链接」 */
-function showDlLoading() { document.getElementById('dl-loading').classList.remove('hidden'); }
-function hideDlLoading() { document.getElementById('dl-loading').classList.add('hidden'); }
-
-/* 判断是否 B站 CDN 直链（历史辅助函数；下载/播放已改直连优先，此处保留备用） */
-function isBiliUrl(url) {
-  return /bilivideo\.|mountaintoys\.|hdslb\.|biliimg\./.test(url || '');
-}
-
-/* fetch + blob 触发真正下载：经代理（同源或 Worker），跨域也能存盘。 */
+/* fetch + blob 触发真正下载：经代理（同源或 Worker），跨域也能存盘 */
 async function downloadViaProxy(url, name, ev) {
   if (ev) ev.preventDefault();
   try {
@@ -992,8 +758,7 @@ async function downloadViaProxy(url, name, ev) {
     toast('下载失败：' + (e.message || e), 'error');
   }
 }
-
-/* 直连源站下载：不经过任何代理，国内 CDN 直连最快、走用户带宽。
+/* 直连源站下载：不经过任何代理，国内 CDN 直连最快。
    仅当源站允许跨域(CORS)时才成功，否则浏览器拒绝读取响应并由 smartDownload 回退代理。 */
 async function downloadDirect(url, name) {
   const resp = await fetch(url, { referrerPolicy: 'no-referrer' });
@@ -1005,7 +770,6 @@ async function downloadDirect(url, name) {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(burl), 5000);
 }
-
 /* 流式写盘下载：桌面 Chromium 支持 File System Access API，可边下边写磁盘，
    不占内存，适合长视频；移动端/Safari 不支持时返回 false 由上层回退。 */
 async function streamSave(url, name) {
@@ -1020,10 +784,11 @@ async function streamSave(url, name) {
   await resp.body.pipeTo(writable);
   return true;
 }
+/* 下载加载提示：点击下载到链接就绪之间显示「正在努力获取下载链接」 */
+function showDlLoading() { document.getElementById('dl-loading').classList.remove('hidden'); }
+function hideDlLoading() { document.getElementById('dl-loading').classList.add('hidden'); }
 
-/* 智能下载：直连流式写盘（最快、不爆内存）→ 直连 blob（小文件）→ 代理兜底。
-   全平台一律「先直连源站（走用户带宽），跨域/403 被拦时自动回退服务端代理」，
-   保证 B站 等强防盗链链接也能成功下载。已对齐线上可下载版本逻辑。 */
+/* 智能下载：直连流式写盘（最快、不爆内存）→ 直连 blob（小文件）→ 代理兜底 */
 async function smartDownload(url, name, ev) {
   if (ev) ev.preventDefault();
   showDlLoading();   // 显示「正在努力获取下载链接…」加载提示
@@ -1037,7 +802,7 @@ async function smartDownload(url, name, ev) {
     // 2) 直连 blob（小文件，或浏览器不支持流式写盘时）
     try { await downloadDirect(url, name); toast('已开始下载（直连加速）：' + name); return; }
     catch (e) { /* 跨域被拦，回退 */ }
-    // 3) 代理兜底（慢但稳，B站等强防盗链走这里）
+    // 3) 代理兜底（慢但稳）
     try { await downloadViaProxy(url, name); }
     catch (e2) { /* downloadViaProxy 内部已 toast */ }
   } finally {
@@ -1046,14 +811,19 @@ async function smartDownload(url, name, ev) {
 }
 
 /* ===== 会话检查 ===== */
-// 已去除 Jerrt OAuth 登录中心：不再弹登录、不限额，始终视为已登录（解析/剪辑无门槛）。
+// 已去除 Jerrt OAuth 登录中心：不再弹登录、不限额、始终可用（解析/剪辑无门槛）。
 async function checkSession() {
   STATE.loggedIn = true; STATE.user = null; STATE.freeLeft = Infinity;
   return true;
 }
 
-/* ===== UI 状态（已去除登录/会员中心，保留空实现以免调用点失效）===== */
-async function updateUI() {}
+/* ===== UI 状态（已去除 OAuth 登录中心，无门槛）===== */
+function updateUI() {
+  const notice    = document.getElementById('free-notice');
+  const noticeTxt = document.getElementById('free-notice-text');
+  if (notice) notice.classList.remove('hidden');
+  if (noticeTxt) noticeTxt.textContent = '免费使用 · 不限次数';
+}
 
 /* ===== 粘贴整段文案时自动提取链接 ===== */
 document.getElementById('url-input').addEventListener('paste', (e) => {
@@ -1066,24 +836,6 @@ document.getElementById('url-input').addEventListener('paste', (e) => {
     }
   }, 30);
 });
-// 链接类型变化时，动态提示清晰度选择器是否可用（仅 B站生效），不引入额外重排
-const _qHint = document.getElementById('quality-hint');
-const _qRow  = document.getElementById('quality-row');
-// 输入监听用 rAF 批量合并，避免逐字符触发 innerHTML 重排
-let _detectRAF = 0;
-document.getElementById('url-input').addEventListener('input', () => {
-  if (_detectRAF) return;
-  _detectRAF = requestAnimationFrame(() => {
-    _detectRAF = 0;
-    const v = document.getElementById('url-input').value.toLowerCase();
-    const isBili = v.includes('bilibili') || v.includes('b23.tv');
-    _qRow.style.opacity = isBili ? '1' : '.55';
-    _qHint.textContent = isBili
-      ? '可选 1080P/4K（需在后台 config.php 配置 BILI_COOKIE 登录态）'
-      : '仅 B站生效，其他平台自动忽略';
-    updateDetect();
-  });
-});
 
 /* ===== 提取去水印 ===== */
 async function onExtract() {
@@ -1091,7 +843,6 @@ async function onExtract() {
   const text  = input.value.trim();
   if (!text) { toast('请先粘贴视频分享链接或文案', 'error'); return; }
 
-  const quality = document.getElementById('quality')?.value || 'auto';
   const btn = document.getElementById('extract-btn');
   btn.disabled = true;
   const pl = document.getElementById('parse-loading');
@@ -1099,7 +850,7 @@ async function onExtract() {
 
   let j;
   try {
-    j = await api('watermark', { url: text, quality });
+    j = await api('watermark', { url: text });
   } catch (e) {
     j = { success: false, msg: '网络异常，请重试' };
   }
@@ -1112,81 +863,43 @@ async function onExtract() {
     return;
   }
 
-  await checkSession();
-  updateUI();
-  renderResult(j, text);
-  scheduleFFmpegPreload();   // 空闲时后台预热剪辑引擎
+  renderResult(j);
+  preloadFFmpeg();   // 后台预热剪辑引擎，点剪辑时即就绪
   toast('解析成功');
-  if (j.quality_note) setTimeout(() => toast(j.quality_note, 'error'), 400); // 画质回落提示
 }
 
-function renderResult(j, rawText) {
+function renderResult(j) {
   const box   = document.getElementById('result');
   const media = document.getElementById('result-media');
   const meta  = document.getElementById('result-meta');
   const dlV   = document.getElementById('dl-video');
   const dlM   = document.getElementById('dl-music');
 
-  // 已移除 COEP 头，视频/封面无需 crossOrigin，直接用源站直链即可预览（抖音等无 CORS 也能播放）
+  // COEP require-corp 要求跨域资源带 crossorigin + CORS；B站有CORS✅ 抖音无CORS❌(预览可能不显示但下载仍可用)
   media.innerHTML = '';
   dlV.referrerPolicy = 'no-referrer';
   dlM.referrerPolicy = 'no-referrer';
   const pf = j.platform || 'video';
   const ts = Date.now();
-  // 下载文件名前缀：视频原标题（无标题时退回平台名兜底）。提升到分支外，
-  // 避免「仅封面无视频」时在 else-if 分支引用未定义的 base 导致 ReferenceError 渲染崩溃。
-  const _title = (j.title || '').toString().trim();
-  const base = _title ? sanitizeName(_title) : ('watermark_' + pf);
   if (j.video_url) {
     const v = document.createElement('video');
-    v.controls = true; v.preload = 'metadata';
+    v.src = j.video_url; v.controls = true; v.preload = 'metadata';
     v.referrerPolicy = 'no-referrer';
+    v.crossOrigin = 'anonymous';   // COEP require-corp 需要
     media.appendChild(v);
-    // 播放链路：所有平台统一「直连优先、代理兜底」。
-    // 直连源站 CDN（元素 no-referrer）→ 走用户带宽、不受本站限制；若加载失败
-    //（含 B站 个别节点对游客 403），自动切服务端代理（带正确 Referer）兜底，保证能播。
-    const directUrl = j.video_url;
-    const proxyUrl = proxyVideoUrl(j.video_url);   // 不带 name，纯流式转发，用于播放
-    let switchedToProxy = false;                    // 直连优先，失败才切代理
-    v.addEventListener('error', function onErr() {
-      if (switchedToProxy) return;
-      if (v.getAttribute('src') !== proxyUrl) {
-        switchedToProxy = true;
-        v.src = proxyUrl;
-        v.load();
-      }
-    });
-    v.src = directUrl;
-    // 封面（poster）：直连优先；B站图床个别节点需代理 → 用离屏 Image 探测，直连失败才切代理。
-    if (j.cover_url) {
-      const coverProxy = proxyVideoUrl(j.cover_url);
-      v.poster = j.cover_url;
-      if (isBiliUrl(j.cover_url)) {
-        const probe = new Image();
-        probe.referrerPolicy = 'no-referrer';
-        probe.onerror = () => { if (v.poster !== coverProxy) v.poster = coverProxy; };
-        probe.src = j.cover_url;
-      }
-    }
-    const vName = base + '.mp4';
-    // —— 修复「下载两次」：<a> 的 href 不再直接指向下载链接（避免浏览器默认跟随），所有下载由
-    //     onclick → smartDownload 同步 preventDefault 后用临时 <a> click 触发，仅下载一次 ——
-    dlV.href = '#';
-    dlV.removeAttribute('download');
+    const vName = 'watermark_' + pf + '_' + ts + '.mp4';
+    dlV.href = dlUrl(j.video_url, vName);
+    dlV.setAttribute('download', vName);
     dlV.onclick = (e) => smartDownload(j.video_url, vName, e);
     dlV.style.display = 'flex';
   } else if (j.cover_url) {
     const img = document.createElement('img');
-    // 封面：统一直连优先（元素 no-referrer，走用户带宽），失败才切服务端代理兜底。
-    img.src = j.cover_url;
-    img.referrerPolicy = 'no-referrer';
-    img.onerror = function () {
-      if (img.src.indexOf('action=proxy_video') < 0) img.src = proxyVideoUrl(j.cover_url);
-    };
+    img.src = j.cover_url; img.referrerPolicy = 'no-referrer';
+    img.crossOrigin = 'anonymous';   // COEP require-corp 需要
     media.appendChild(img);
-    const cName = base + '_cover.jpg';
-    dlV.href = '#';
-    dlV.removeAttribute('download');
+    const cName = 'cover_' + pf + '_' + ts + '.jpg';
+    dlV.href = dlUrl(j.cover_url, cName);
+    dlV.setAttribute('download', cName);
     dlV.onclick = (e) => smartDownload(j.cover_url, cName, e);
     dlV.style.display = 'flex';
   } else {
@@ -1194,26 +907,20 @@ function renderResult(j, rawText) {
   }
 
   if (j.music_url) {
-    const mName = base + '_music.mp3';
-    dlM.href = '#';
-    dlM.removeAttribute('download');
+    const mName = 'music_' + pf + '_' + ts + '.mp3';
+    dlM.href = dlUrl(j.music_url, mName);
+    dlM.setAttribute('download', mName);
     dlM.onclick = (e) => smartDownload(j.music_url, mName, e);
     dlM.style.display = 'flex';
   }
   else { dlM.style.display = 'none'; }
 
   const parts = [];
-  if (j.platform) parts.push('<b>平台：</b>' + platformIcon(j.platform, 15) + escapeHtml(platformName(j.platform)));
+  if (j.platform) parts.push('<b>平台：</b>' + escapeHtml(platformName(j.platform)));
   if (j.title)    parts.push('<b>标题：</b>' + escapeHtml(j.title));
   if (j.author)   parts.push('<b>作者：</b>' + escapeHtml(j.author));
   if (j.duration) parts.push('<b>时长：</b>' + escapeHtml(secToTime(j.duration)));
-  let html = parts.join(' &nbsp;·&nbsp; ') || '解析完成';
-  // 解析来源徽标：让用户直观看到是“官方直连 / 本地解析 / 第三方备用”哪条路
-  if (j.source) {
-    html += '<span class="src-badge ' + badgeClass(j.source) + '">' + sourceText(j.source) + '</span>';
-  }
-  if (j.quality_note) html += '<div class="quality-note">' + escapeHtml(j.quality_note) + '</div>';
-  meta.innerHTML = html;
+  meta.innerHTML = parts.join(' &nbsp;·&nbsp; ') || '解析完成';
 
   // 直连极速下载入口（参考 peanutdl：右键「链接另存为」可直连源站，最快且不受 CORS 限制，适合抖音/大视频）
   let dd = document.getElementById('directDl');
@@ -1244,182 +951,18 @@ function renderResult(j, rawText) {
   document.getElementById('trimStatus').className = 'trim-status';
   document.getElementById('trimProgress').style.display = 'none';
 
-  // 复制链接按钮（本地剪贴板，失败回退 execCommand）
-  const copyBtn = document.getElementById('copy-link');
-  if (copyBtn) {
-    copyBtn.style.display = j.video_url ? 'flex' : 'none';
-    copyBtn.onclick = (e) => { e.preventDefault(); copyText(j.video_url); };
-  }
-
-  // 记入历史（仅成功且拿到视频直链）
-  if (j.video_url) addHistory({ url: (rawText || '').trim(), title: j.title, platform: j.platform, author: j.author, cover: j.cover_url });
-
   box.classList.remove('hidden');
   box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-/* 平台品牌 SVG 图标（Simple Icons 官方路径 + 抖音/西瓜自定义品牌图形） */
-const PLAT_SVG = {"bilibili":"M17.813 4.653h.854c1.51.054 2.769.578 3.773 1.574 1.004.995 1.524 2.249 1.56 3.76v7.36c-.036 1.51-.556 2.769-1.56 3.773s-2.262 1.524-3.773 1.56H5.333c-1.51-.036-2.769-.556-3.773-1.56S.036 18.858 0 17.347v-7.36c.036-1.511.556-2.765 1.56-3.76 1.004-.996 2.262-1.52 3.773-1.574h.774l-1.174-1.12a1.234 1.234 0 0 1-.373-.906c0-.356.124-.658.373-.907l.027-.027c.267-.249.573-.373.92-.373.347 0 .653.124.92.373L9.653 4.44c.071.071.134.142.187.213h4.267a.836.836 0 0 1 .16-.213l2.853-2.747c.267-.249.573-.373.92-.373.347 0 .662.151.929.4.267.249.391.551.391.907 0 .355-.124.657-.373.906zM5.333 7.24c-.746.018-1.373.276-1.88.773-.506.498-.769 1.13-.786 1.894v7.52c.017.764.28 1.395.786 1.893.507.498 1.134.756 1.88.773h13.334c.746-.017 1.373-.275 1.88-.773.506-.498.769-1.129.786-1.893v-7.52c-.017-.765-.28-1.396-.786-1.894-.507-.497-1.134-.755-1.88-.773zM8 11.107c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V12.44c0-.373.129-.689.386-.947.258-.257.574-.386.947-.386zm8 0c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V12.44c.017-.391.15-.711.4-.96.249-.249.56-.373.933-.373Z","ks":"M18.315 12.264c2.33 0 4.218 1.88 4.218 4.2V19.8c0 2.32-1.888 4.2-4.218 4.2h-6.202a4.218 4.218 0 0 1-4.023-2.938l-3.676 1.833a2.04 2.04 0 0 1-2.731-.903 2.015 2.015 0 0 1-.216-.907v-5.94a2.03 2.03 0 0 1 2.035-2.024 2.044 2.044 0 0 1 .919.218l3.673 1.85a4.218 4.218 0 0 1 4.02-2.925zm-.062 2.162h-6.078c-1.153 0-2.09.921-2.108 2.065v3.247c0 1.148.925 2.081 2.073 2.1h6.113c1.153 0 2.09-.922 2.109-2.065v-3.247a2.104 2.104 0 0 0-2.074-2.1zM4.18 15.72a.554.554 0 0 0-.555.542v3.734a.556.556 0 0 0 .798.496l.01-.004 3.463-1.756V17.51l-3.467-1.73a.557.557 0 0 0-.249-.06zM9.28 0a5.667 5.667 0 0 1 4.98 2.965 4.921 4.921 0 0 1 3.36-1.317c2.714 0 4.913 2.177 4.913 4.863 0 2.686-2.2 4.863-4.912 4.863a4.921 4.921 0 0 1-3.996-2.034 5.651 5.651 0 0 1-4.345 2.034c-3.131 0-5.67-2.546-5.67-5.687C3.61 2.546 6.149 0 9.28 0Zm8.34 3.926c-1.441 0-2.61 1.157-2.61 2.585s1.169 2.585 2.61 2.585c1.443 0 2.612-1.157 2.612-2.585s-1.169-2.585-2.611-2.585zM9.28 2.287a3.395 3.395 0 0 0-3.39 3.4c0 1.877 1.518 3.4 3.39 3.4a3.395 3.395 0 0 0 3.39-3.4c0-1.878-1.518-3.4-3.39-3.4z","xhs":"M22.405 9.879c.002.016.01.02.07.019h.725a.797.797 0 0 0 .78-.972.794.794 0 0 0-.884-.618.795.795 0 0 0-.692.794c0 .101-.002.666.001.777zm-11.509 4.808c-.203.001-1.353.004-1.685.003a2.528 2.528 0 0 1-.766-.126.025.025 0 0 0-.03.014L7.7 16.127a.025.025 0 0 0 .01.032c.111.06.336.124.495.124.66.01 1.32.002 1.981 0 .01 0 .02-.006.023-.015l.712-1.545a.025.025 0 0 0-.024-.036zM.477 9.91c-.071 0-.076.002-.076.01a.834.834 0 0 0-.01.08c-.027.397-.038.495-.234 3.06-.012.24-.034.389-.135.607-.026.057-.033.042.003.112.046.092.681 1.523.787 1.74.008.015.011.02.017.02.008 0 .033-.026.047-.044.147-.187.268-.391.371-.606.306-.635.44-1.325.486-1.706.014-.11.021-.22.03-.33l.204-2.616.022-.293c.003-.029 0-.033-.03-.034zm7.203 3.757a1.427 1.427 0 0 1-.135-.607c-.004-.084-.031-.39-.235-3.06a.443.443 0 0 0-.01-.082c-.004-.011-.052-.008-.076-.008h-1.48c-.03.001-.034.005-.03.034l.021.293c.076.982.153 1.964.233 2.946.05.4.186 1.085.487 1.706.103.215.223.419.37.606.015.018.037.051.048.049.02-.003.742-1.642.804-1.765.036-.07.03-.055.003-.112zm3.861-.913h-.872a.126.126 0 0 1-.116-.178l1.178-2.625a.025.025 0 0 0-.023-.035l-1.318-.003a.148.148 0 0 1-.135-.21l.876-1.954a.025.025 0 0 0-.023-.035h-1.56c-.01 0-.02.006-.024.015l-.926 2.068c-.085.169-.314.634-.399.938a.534.534 0 0 0-.02.191.46.46 0 0 0 .23.378.981.981 0 0 0 .46.119h.59c.041 0-.688 1.482-.834 1.972a.53.53 0 0 0-.023.172.465.465 0 0 0 .23.398c.15.092.342.12.475.12l1.66-.001c.01 0 .02-.006.023-.015l.575-1.28a.025.025 0 0 0-.024-.035zm-6.93-4.937H3.1a.032.032 0 0 0-.034.033c0 1.048-.01 2.795-.01 6.829 0 .288-.269.262-.28.262h-.74c-.04.001-.044.004-.04.047.001.037.465 1.064.555 1.263.01.02.03.033.051.033.157.003.767.009.938-.014.153-.02.3-.06.438-.132.3-.156.49-.419.595-.765.052-.172.075-.353.075-.533.002-2.33 0-4.66-.007-6.991a.032.032 0 0 0-.032-.032zm11.784 6.896c0-.014-.01-.021-.024-.022h-1.465c-.048-.001-.049-.002-.05-.049v-4.66c0-.072-.005-.07.07-.07h.863c.08 0 .075.004.075-.074V8.393c0-.082.006-.076-.08-.076h-3.5c-.064 0-.075-.006-.075.073v1.445c0 .083-.006.077.08.077h.854c.075 0 .07-.004.07.07v4.624c0 .095.008.084-.085.084-.37 0-1.11-.002-1.304 0-.048.001-.06.03-.06.03l-.697 1.519s-.014.025-.008.036c.006.01.013.008.058.008 1.748.003 3.495.002 5.243.002.03-.001.034-.006.035-.033v-1.539zm4.177-3.43c0 .013-.007.023-.02.024-.346.006-.692.004-1.037.004-.014-.002-.022-.01-.022-.024-.005-.434-.007-.869-.01-1.303 0-.072-.006-.071.07-.07l.733-.003c.041 0 .081.002.12.015.093.025.16.107.165.204.006.431.002 1.153.001 1.153zm2.67.244a1.953 1.953 0 0 0-.883-.222h-.18c-.04-.001-.04-.003-.042-.04V10.21c0-.132-.007-.263-.025-.394a1.823 1.823 0 0 0-.153-.53 1.533 1.533 0 0 0-.677-.71 2.167 2.167 0 0 0-1-.258c-.153-.003-.567 0-.72 0-.07 0-.068.004-.068-.065V7.76c0-.031-.01-.041-.046-.039H17.93s-.016 0-.023.007c-.006.006-.008.012-.008.023v.546c-.008.036-.057.015-.082.022h-.95c-.022.002-.028.008-.03.032v1.481c0 .09-.004.082.082.082h.913c.082 0 .072.128.072.128V11.19s.003.117-.06.117h-1.482c-.068 0-.06.082-.06.082v1.445s-.01.068.064.068h1.457c.082 0 .076-.006.076.079v3.225c0 .088-.007.081.082.081h1.43c.09 0 .082.007.082-.08v-3.27c0-.029.006-.035.033-.035l2.323-.003c.098 0 .191.02.28.061a.46.46 0 0 1 .274.407c.008.395.003.79.003 1.185 0 .259-.107.367-.33.367h-1.218c-.023.002-.029.008-.028.033.184.437.374.871.57 1.303a.045.045 0 0 0 .04.026c.17.005.34.002.51.003.15-.002.517.004.666-.01a2.03 2.03 0 0 0 .408-.075c.59-.18.975-.698.976-1.313v-1.981c0-.128-.01-.254-.034-.38 0 .078-.029-.641-.724-.998z","tiktok":"M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z","weibo":"M10.098 20.323c-3.977.391-7.414-1.406-7.672-4.02-.259-2.609 2.759-5.047 6.74-5.441 3.979-.394 7.413 1.404 7.671 4.018.259 2.6-2.759 5.049-6.737 5.439l-.002.004zM9.05 17.219c-.384.616-1.208.884-1.829.602-.612-.279-.793-.991-.406-1.593.379-.595 1.176-.861 1.793-.601.622.263.82.972.442 1.592zm1.27-1.627c-.141.237-.449.353-.689.253-.236-.09-.313-.361-.177-.586.138-.227.436-.346.672-.24.239.09.315.36.18.601l.014-.028zm.176-2.719c-1.893-.493-4.033.45-4.857 2.118-.836 1.704-.026 3.591 1.886 4.21 1.983.64 4.318-.341 5.132-2.179.8-1.793-.201-3.642-2.161-4.149zm7.563-1.224c-.346-.105-.57-.18-.405-.615.375-.977.42-1.804 0-2.404-.781-1.112-2.915-1.053-5.364-.03 0 0-.766.331-.571-.271.376-1.217.315-2.224-.27-2.809-1.338-1.337-4.869.045-7.888 3.08C1.309 10.87 0 13.273 0 15.348c0 3.981 5.099 6.395 10.086 6.395 6.536 0 10.888-3.801 10.888-6.82 0-1.822-1.547-2.854-2.915-3.284v.01zm1.908-5.092c-.766-.856-1.908-1.187-2.96-.962-.436.09-.706.511-.616.932.09.42.511.691.932.602.511-.105 1.067.044 1.442.465.376.421.466.977.316 1.473-.136.406.089.856.51.992.405.119.857-.105.992-.512.33-1.021.12-2.178-.646-3.035l.03.045zm2.418-2.195c-1.576-1.757-3.905-2.419-6.054-1.968-.496.104-.812.587-.706 1.081.104.496.586.813 1.082.707 1.532-.331 3.185.15 4.296 1.383 1.112 1.246 1.429 2.943.947 4.416-.165.48.106 1.007.586 1.157.479.165.991-.104 1.157-.586.675-2.088.241-4.478-1.338-6.235l.03.045z","zhihu":"M5.721 0C2.251 0 0 2.25 0 5.719V18.28C0 21.751 2.252 24 5.721 24h12.56C21.751 24 24 21.75 24 18.281V5.72C24 2.249 21.75 0 18.281 0zm1.964 4.078c-.271.73-.5 1.434-.68 2.11h4.587c.545-.006.445 1.168.445 1.171H9.384a58.104 58.104 0 01-.112 3.797h2.712c.388.023.393 1.251.393 1.266H9.183a9.223 9.223 0 01-.408 2.102l.757-.604c.452.456 1.512 1.712 1.906 2.177.473.681.063 2.081.063 2.081l-2.794-3.382c-.653 2.518-1.845 3.607-1.845 3.607-.523.468-1.58.82-2.64.516 2.218-1.73 3.44-3.917 3.667-6.497H4.491c0-.015.197-1.243.806-1.266h2.71c.024-.32.086-3.254.086-3.797H6.598c-.136.406-.158.447-.268.753-.594 1.095-1.603 1.122-1.907 1.155.906-1.821 1.416-3.6 1.591-4.064.425-1.124 1.671-1.125 1.671-1.125zM13.078 6h6.377v11.33h-2.573l-2.184 1.373-.401-1.373h-1.219zm1.313 1.219v8.86h.623l.263.937 1.455-.938h1.456v-8.86z","youtube":"M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z","twitter":"M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z","wechat":"M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.72-1.78 6.22.942 2.453 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-2.931-5.837-6.656-6.088V8.89c-.135-.01-.27-.027-.407-.03zm-2.53 3.274c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z","douyin":"M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z","xigua":"M12 4C6.48 4 2 8.48 2 14c0 .55.45 1 1 1h18c.55 0 1-.45 1-1 0-5.52-4.48-10-10-10z"};
-const PLAT_COLOR = {"douyin":"#fe2c55","bilibili":"#fb7299","ks":"#ff5000","xhs":"#ff2442","tiktok":"#25f4ee","weibo":"#e6162d","zhihu":"#0084ff","youtube":"#ff0000","twitter":"#1d9bf0","wechat":"#07c160","xigua":"#2ecc71"};
-function platformIcon(p, size) {
-  size = size || 16;
-  const d = PLAT_SVG[p] || PLAT_SVG['douyin'];
-  const c = PLAT_COLOR[p] || '#888';
-  return '<svg class="plat-ico" width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="' + c + '" aria-hidden="true" focusable="false"><path d="' + d + '"/></svg>';
-}
-
 function platformName(p) {
-  return ({ douyin: '抖音', ks: '快手', xhs: '小红书', tiktok: 'TikTok', bilibili: 'Bilibili',
-            xigua: '西瓜视频', weibo: '微博', zhihu: '知乎', youtube: 'YouTube', twitter: 'X/Twitter', wechat: '微信视频号' })[p] || p;
-}
-/* 解析来源徽标：官方直连(绿) / 本地解析(蓝) / 第三方备用(橙) */
-function sourceText(s) {
-  return ({ 'local': '本地解析', 'bilibili-official': '官方直连', bugpk: '第三方备用', douyinwtf: '第三方备用' })[s] || '解析';
-}
-function badgeClass(s) {
-  return ({ 'local': 'local', 'bilibili-official': 'official', bugpk: 'thirdparty', douyinwtf: 'thirdparty' })[s] || 'thirdparty';
+  return ({ douyin: '抖音', ks: '快手', xhs: '小红书', tiktok: 'TikTok', bilibili: 'Bilibili' })[p] || p;
 }
 
 function escapeHtml(s) {
   const d = document.createElement('div');
   d.textContent = s || '';
   return d.innerHTML;
-}
-
-/* 从文案中提取第一个 http(s) 链接（与后端 extract_url_from_text 一致） */
-function extractUrl(text) {
-  const m = (text || '').match(/https?:\/\/[^\s"'<>]+/i);
-  if (!m) return '';
-  return m[0].replace(/[.,;:!?）)】]}'"\s\t\n\r]+$/, '');
-}
-function escapeAttr(s) {
-  return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-/* 复制文本到剪贴板（带 execCommand 回退，兼容非 HTTPS / 旧浏览器） */
-function copyText(t) {
-  if (!t) return;
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(t).then(() => toast('链接已复制')).catch(() => fallbackCopy(t));
-  } else fallbackCopy(t);
-}
-function fallbackCopy(t) {
-  const ta = document.createElement('textarea');
-  ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
-  document.body.appendChild(ta); ta.focus(); ta.select();
-  try { document.execCommand('copy'); toast('链接已复制'); }
-  catch (e) { toast('复制失败，请手动复制', 'error'); }
-  ta.remove();
-}
-
-/* 平台实时识别徽标 */
-function detectPlatformFromUrl(v) {
-  if (v.includes('bilibili') || v.includes('b23.tv')) return 'bilibili';
-  if (v.includes('douyin') || v.includes('iesdouyin')) return 'douyin';
-  if (v.includes('tiktok')) return 'tiktok';
-  if (v.includes('kuaishou') || v.includes('gifshow') || v.includes('chenzhongtech')) return 'ks';
-  if (v.includes('xiaohongshu') || v.includes('xhslink')) return 'xhs';
-  if (v.includes('ixigua') || v.includes('xigua')) return 'xigua';
-  if (v.includes('weibo')) return 'weibo';
-  if (v.includes('zhihu')) return 'zhihu';
-  if (v.includes('youtu')) return 'youtube';
-  if (v.includes('twitter') || v.includes('x.com')) return 'twitter';
-  if (v.includes('channels.weixin') || v.includes('finder')) return 'wechat';
-  return 'douyin';
-}
-function detectColor(p) {
-  return ({ bilibili:'#fb7299', douyin:'#161823', ks:'#ff4906', xhs:'#ff2442', tiktok:'#25f4ee',
-            xigua:'#ff7a00', weibo:'#e6162d', zhihu:'#0084ff', youtube:'#ff0000', twitter:'#1d9bf0', wechat:'#07c160' })[p] || '#888';
-}
-function updateDetect() {
-  const v = document.getElementById('url-input').value.toLowerCase();
-  const chip = document.getElementById('detect-chip');
-  if (!v.trim()) { chip.style.display = 'none'; return; }
-  const p = detectPlatformFromUrl(v);
-  chip.style.display = 'inline-flex';
-  chip.innerHTML = '<span class="dot" style="background:' + detectColor(p) + '"></span>' + platformIcon(p, 14) + '已识别：' + platformName(p);
-}
-
-/* 平台快捷 chips（带品牌 SVG 图标） */
-const CHIPS = ['douyin','tiktok','ks','xhs','bilibili','xigua','weibo','zhihu','youtube','wechat'];
-function renderChips() {
-  const el = document.getElementById('chips');
-  if (!el) return;
-  el.innerHTML = CHIPS.map(p =>
-    '<span class="chip">' + platformIcon(p, 14) + platformName(p) + '</span>'
-  ).join('');
-}
-
-/* ===== 历史记录（localStorage，最多 30 条） ===== */
-const HKEY = 'wm_history';
-function loadHistory() { try { return JSON.parse(localStorage.getItem(HKEY)) || []; } catch (e) { return []; } }
-function saveHistory(list) { try { localStorage.setItem(HKEY, JSON.stringify(list.slice(0, 30))); } catch (e) {} }
-function addHistory(item) {
-  if (!item || !item.url) return;
-  const list = loadHistory().filter(h => h.url !== item.url);
-  list.unshift(item);
-  saveHistory(list);
-  if (!document.getElementById('history-panel').classList.contains('hidden')) renderHistory();
-}
-function renderHistory() {
-  const list = loadHistory();
-  const el = document.getElementById('history-list');
-  if (!list.length) { el.innerHTML = '<div class="history-empty">暂无记录，解析成功后会自动保存</div>'; return; }
-  el.innerHTML = list.map((h, i) =>
-    '<div class="history-item">' +
-      '<div class="hi-thumb" style="background-image:url(\'' + escapeAttr(h.cover || '') + '\')"></div>' +
-      '<div class="hi-info"><div class="hi-title">' + escapeHtml(h.title || '视频') + '</div>' +
-      '<div class="hi-meta">' + platformIcon(h.platform, 13) + escapeHtml(platformName(h.platform)) + ' · ' + escapeHtml(h.author || '') + '</div></div>' +
-      '<div class="bi-actions"><button type="button" class="bi-btn" data-copy-h="' + i + '">复制</button>' +
-      '<button type="button" class="bi-btn" data-load="' + i + '">载入</button></div>' +
-    '</div>'
-  ).join('');
-}
-
-/* ===== 批量解析（并发，谁先回谁先显示） ===== */
-let batchBusy = false;
-async function onBatchExtract() {
-  if (batchBusy) return;
-  const ta = document.getElementById('batch-input');
-  const lines = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
-  const links = [];
-  for (const line of lines) { const u = extractUrl(line); if (u) links.push(u); }
-  if (!links.length) { toast('未识别到有效链接', 'error'); return; }
-  batchBusy = true;
-  const btn = document.getElementById('batch-btn');
-  btn.disabled = true; btn.textContent = '解析中…';
-  const box = document.getElementById('batch-results');
-  box.innerHTML = '<div class="history-empty">正在并发解析 ' + links.length + ' 条…</div>';
-  const results = await Promise.all(links.map(l =>
-    api('watermark', { url: l, quality: 'auto' }).then(r => ({ r, l }))
-  ));
-  window.__batchUrls = results.map(x => x.r.success ? x.r.video_url : '');
-  const okCount = window.__batchUrls.filter(Boolean).length;
-  const copyAllBtn = okCount
-    ? '<button type="button" class="bi-btn dl-all" data-copy-all style="margin-bottom:8px;align-self:flex-start;">复制全部直链（' + okCount + '）</button>'
-    : '';
-  box.innerHTML = copyAllBtn + results.map(({ r, l }, i) => {
-    if (r.success) {
-      const u = r.video_url;
-      return '<div class="batch-item"><div class="bi-info"><div class="bi-title">' +
-        escapeHtml(r.title || '视频') + '</div>' +
-        '<span class="src-badge ' + badgeClass(r.source) + '">' + sourceText(r.source) + '</span> ' +
-        platformIcon(r.platform, 13) + escapeHtml(platformName(r.platform)) + '</div>' +
-        '<div class="bi-actions"><button type="button" class="bi-btn" data-copy="' + i + '">复制</button>' +
-        '<button type="button" class="bi-btn" data-batch-dl="' + i + '">下载</button></div></div>';
-    }
-    return '<div class="batch-item err"><div class="bi-info"><div class="bi-title">' +
-      escapeHtml(l.slice(0, 48)) + '</div><div class="bi-err">' + escapeHtml(r.msg || '解析失败') + '</div></div></div>';
-  }).join('');
-  btn.disabled = false; btn.textContent = '批量解析去水印';
-  batchBusy = false;
-}
-
-/* ===== 主题（明暗，持久化） ===== */
-/* 深色与浅色都显式打上 data-theme，绝不删除属性——否则浅色系统下
-   @media(prefers-color-scheme:light) 会强制覆盖、导致切不回深色 */
-function applyTheme(t) {
-  document.documentElement.setAttribute('data-theme', (t === 'light') ? 'light' : 'dark');
 }
 
 /* ===== 时间工具 ===== */
@@ -1441,9 +984,8 @@ let ffmpegReady = null;
 let ffmpegLoading = null;
 // 同源 ffmpeg 资源代理：把公共 CDN 的 @ffmpeg/* 以本站同源路径伺服，
 // 绕开 InfinityFree WAF（拦截静态 .js/.wasm）与浏览器对跨源 module Worker 的禁止。
-// f 经 base64url 编码，避免 URL 出现 .js/.wasm 字面量触发 InfinityFree WAF 挑战页。
-// 用相对路径（不带前导 /），保证部署在根目录或子目录(tests/ 等)都自洽。
-const FFMPEG_PROXY = (p) => 'ffmpeg_proxy.php?f=' + btoa(p).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+// f 经 base64url 编码，避免 URL 出现 .js/.wasm 字面量触发 InfinityFree WAF 挑战页
+const FFMPEG_PROXY = (p) => '/ffmpeg_proxy.php?f=' + btoa(p).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 // silent=true 时不写状态文案，用于登录/解析后的后台预加载，让用户点剪辑时已就绪
 async function ensureFFmpeg(silent = false) {
   if (ffmpegReady) return ffmpegReady;
@@ -1519,19 +1061,11 @@ function preloadFFmpeg() {
   if (ffmpegReady || ffmpegLoading) return;
   ensureFFmpeg(true).catch(e => console.warn('后台预加载剪辑引擎失败（可忽略，点击剪辑时会重新加载）:', e));
 }
-// 空闲时再预热剪辑引擎：把约 30MB 的 wasm 下载推迟到浏览器空闲，避免占用首屏带宽导致卡顿
-function scheduleFFmpegPreload() {
-  if (ffmpegReady || ffmpegLoading) return;
-  const run = () => preloadFFmpeg();
-  if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 4000 });
-  else setTimeout(run, 1500);
-}
 
 // 带进度的流式下载：分块读取并累计字节，返回 Uint8Array（供 ffmpeg.writeFile 使用）。
 // 直连/代理源站只要返回 Content-Length，即可显示真实百分比；否则退化为“已下载 MB”提示。
 async function fetchWithProgress(url, onProgress) {
-  // no-referrer：直连 CDN 时不送本站 Referer，放行防盗链（B站等）；代理为同源同样适用
-  const r = await fetch(url, { referrerPolicy: 'no-referrer' });
+  const r = await fetch(url);
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const total = parseInt(r.headers.get('content-length') || '0', 10);
   const reader = r.body && r.body.getReader ? r.body.getReader() : null;
@@ -1558,12 +1092,10 @@ async function fetchWithProgress(url, onProgress) {
 // ===== 多片段剪辑辅助 =====
 // 文件名清洗：去掉系统非法字符，空格转下划线，过长截断
 function sanitizeName(s) {
-  // 保留原始标题可读性：只替换文件系统非法字符，不把空格转下划线，
-  // 截断放宽到 80 字符（足够容纳完整标题，避免「Rick_Astley」被截成「Rick_As」）。
   return (s || '').toString().trim()
     .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
-    .replace(/\s+/g, ' ')
-    .slice(0, 80).trim() || 'clip';
+    .replace(/\s+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
+    .slice(0, 40) || 'clip';
 }
 // 时间格式校验：合法返回 null，非法返回错误文案（空串不算错，留空即跳过）
 function parseTimeErr(v) {
@@ -1707,52 +1239,34 @@ async function doTrim() {
   try {
     const { ffmpeg } = await ensureFFmpeg();
     const proxy = proxyVideoUrl(STATE.videoUrl);
-    // 剪辑需先在浏览器内存里拿到完整源视频才能交给 ffmpeg（下载受 CORS 限制）。
-    // 先尝试直连（no-referrer）：CDN 若允许跨域则最快，且不占用主机带宽；
-    // 失败（无 CORS / 防盗链 403）再回退服务器代理中转。
     if (isSpeed) {
       ts.className = 'trim-status warn';
       ts.textContent = 'ℹ 变速裁剪需重新编码（已启用极速预设），较大视频仍会较慢，请耐心等待';
     }
     tlt.textContent = isSpeed ? '正在下载视频到本地…（变速需重新编码，稍慢）' : '正在下载视频到本地…';
     ts.textContent = '下载视频中…';
-    // rAF 合并 DOM 写入：ffmpeg 进度事件触发密集，逐帧只刷新一次，避免布局抖动
-    let _rafP = 0, _pp = { pct: 0, tl: '', ts: '' };
-    const _flushP = () => {
-      _rafP = 0;
-      prog.querySelector('i').style.width = _pp.pct + '%';
-      if (_pp.tl) tlt.textContent = _pp.tl;
-      if (_pp.ts) ts.textContent = _pp.ts;
-    };
-    const scheduleP = (pct, tl, ts2) => {
-      if (pct != null) _pp.pct = pct;
-      if (tl !== undefined) _pp.tl = tl;
-      if (ts2 !== undefined) _pp.ts = ts2;
-      if (!_rafP) _rafP = requestAnimationFrame(_flushP);
-    };
     const onDl = (rec, total) => {
       const mb = (rec / 1048576).toFixed(1);
       const pct = total
         ? Math.min(99, Math.round(rec / total * 100))
         : Math.min(95, rec / (100 * 1048576) * 100);   // 无总大小时按已下 MB 估算
-      scheduleP(pct, total ? `正在下载视频到本地… ${pct}%` : `正在下载视频到本地… ${mb}MB`);
+      prog.querySelector('i').style.width = pct + '%';
+      tlt.textContent = total ? `正在下载视频到本地… ${pct}%` : `正在下载视频到本地… ${mb}MB`;
+      ts.textContent = tlt.textContent;
     };
     // 整段视频只下载一次，所有片段复用（下载是主要耗时，避免重复下）
     let data;
-    // 取源：统一直连优先（走用户带宽、不占本站出口）；直连失败（无 CORS / B站 个别节点 403）
-    // 再回退服务端代理（带正确 Referer）兜底。
     try { data = await fetchWithProgress(STATE.videoUrl, onDl); }
-    catch (e) {
-      console.warn('直连取源失败，回退代理:', e?.message);
-      data = await fetchWithProgress(proxy, onDl);
-    }
+    catch (e) { console.warn('直连下载失败，回退代理:', e?.message); data = await fetchWithProgress(proxy, onDl); }
     await ffmpeg.writeFile('in.mp4', data);
 
     let curSeg = 0;
     ffmpeg.off('progress');
     ffmpeg.on('progress', ({ progress }) => {
       const p = Math.max(0, Math.min(100, Math.round(progress * 100)));
-      scheduleP(p, `正在剪辑片段 ${curSeg}/${segs.length}… ${p}%`, `截取片段 ${curSeg}/${segs.length}… ${p}%`);
+      prog.querySelector('i').style.width = p + '%';
+      tlt.textContent = `正在剪辑片段 ${curSeg}/${segs.length}… ${p}%`;
+      ts.textContent = `截取片段 ${curSeg}/${segs.length}… ${p}%`;
     });
 
     const clips = [];
@@ -1762,22 +1276,13 @@ async function doTrim() {
       const pts = (1 / speed).toFixed(3);
       let args;
       if (speed === 1) {
-        // 1x：仅重封装（-c copy），秒级完成。
-        // —— 剪辑加速：原代码用 ffmpeg 默认 seek-to-input 前要解码到 keyframe 之后，
-        //     ffmpeg.wasm 在 wasm32 单线程下做解码/重 mux 仍是主要耗时。
-        //     -noaccurate_seek        → 以关键帧为单位快速跳转（对 -c copy 无损伤）
-        //     -avoid_negative_ts make_zero → 避免段头 PTS 漂移到 0 导致 moov 重排
-        //     实测对 >30min 视频由分钟级降到秒级。——
-        args = ['-ss', String(seg.s), '-noaccurate_seek', '-to', String(seg.e), '-i', 'in.mp4',
-                '-c', 'copy', '-avoid_negative_ts', 'make_zero',
-                '-movflags', '+faststart', 'out.mp4'];
+        // 1x：仅重封装（-c copy），秒级完成
+        args = ['-ss', String(seg.s), '-to', String(seg.e), '-i', 'in.mp4', '-c', 'copy', '-movflags', '+faststart', 'out.mp4'];
       } else {
         // 变速：重编码（setpts 改视频、atempo 改音频）；-preset ultrafast 大幅加速单线程编码
-        // —— 剪辑加速：-threads 0 让 ffmpeg.wasm 走内部 worker 池；-noaccurate_seek 同样走关键帧 —
-        args = ['-ss', String(seg.s), '-noaccurate_seek', '-to', String(seg.e), '-i', 'in.mp4',
+        args = ['-ss', String(seg.s), '-to', String(seg.e), '-i', 'in.mp4',
                 '-filter:v', `setpts=${pts}*PTS`, '-filter:a', `atempo=${speed}`,
-                '-preset', 'ultrafast', '-threads', '0',
-                '-movflags', '+faststart', 'out.mp4'];
+                '-preset', 'ultrafast', '-movflags', '+faststart', 'out.mp4'];
       }
       tlt.textContent = `正在剪辑片段 ${curSeg}/${segs.length}…`;
       ts.textContent = `截取片段 ${curSeg}/${segs.length}…`;
@@ -1810,8 +1315,6 @@ async function doTrim() {
     ts.className = 'trim-status err';
     ts.textContent = '剪辑失败：' + (err?.message || err) + '。若反复失败可稍后重试，或先用「直连极速下载」把视频存到本地再剪';
   } finally {
-    // —— 加速：释放 ffmpeg.wasm 文件系统里的大视频内存（in.mp4），避免下个剪辑会话累积造成卡死 ——
-    try { await ffmpeg.deleteFile('in.mp4'); } catch (e) {}
     trimBtn.disabled = false;
   }
 }
@@ -1871,78 +1374,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   }
   refreshSegUI();   // 初始刷新（保证删除按钮/添加按钮禁用态正确）
-
-  // ===== 工具行：批量 / 历史 / 主题 =====
-  const btnBatch = document.getElementById('toggle-batch');
-  const singleArea = document.getElementById('single-area');
-  const batchArea = document.getElementById('batch-area');
-  btnBatch.addEventListener('click', () => {
-    const on = batchArea.classList.contains('hidden');
-    batchArea.classList.toggle('hidden', !on);
-    singleArea.style.display = on ? 'none' : '';
-    btnBatch.classList.toggle('active', on);
-    if (on) document.getElementById('batch-input').focus();
-  });
-  const btnHistory = document.getElementById('toggle-history');
-  const historyPanel = document.getElementById('history-panel');
-  btnHistory.addEventListener('click', () => {
-    const show = historyPanel.classList.contains('hidden');
-    historyPanel.classList.toggle('hidden', !show);
-    btnHistory.classList.toggle('active', show);
-    if (show) renderHistory();
-  });
-  document.getElementById('history-clear').addEventListener('click', () => {
-    saveHistory([]); renderHistory(); toast('历史已清空');
-  });
-  // 历史记录点击委托：载入到单条模式并重新解析
-  document.getElementById('history-list').addEventListener('click', (e) => {
-    const ch = e.target.closest('[data-copy-h]');
-    if (ch) { const it = loadHistory()[+ch.dataset.copyH]; if (it) copyText(it.url); return; }
-    const b = e.target.closest('[data-load]');
-    if (!b) return;
-    const item = loadHistory()[+b.dataset.load];
-    if (!item) return;
-    batchArea.classList.add('hidden'); singleArea.style.display = '';
-    btnBatch.classList.remove('active');
-    const inp = document.getElementById('url-input');
-    inp.value = item.url; updateDetect();
-    historyPanel.classList.add('hidden'); btnHistory.classList.remove('active');
-    onExtract();
-  });
-  // 批量结果点击委托：复制
-  document.getElementById('batch-results').addEventListener('click', (e) => {
-    const all = e.target.closest('[data-copy-all]');
-    if (all) { copyText((window.__batchUrls || []).filter(Boolean).join('\n')); return; }
-    const b = e.target.closest('[data-copy]');
-    if (b) { copyText((window.__batchUrls || [])[+b.dataset.copy]); return; }
-    const d = e.target.closest('[data-batch-dl]');
-    if (d) { const u = (window.__batchUrls || [])[+d.dataset.batchDl]; if (u) smartDownload(u, 'batch_下载.mp4'); }
-  });
-  document.getElementById('batch-btn').addEventListener('click', onBatchExtract);
-
-  // ===== 主题切换（持久化） =====
-  const btnTheme = document.getElementById('toggle-theme');
-  const savedTheme = localStorage.getItem('wm_theme');
-  if (savedTheme) applyTheme(savedTheme); // 首帧已由 <head> 内联脚本处理，此处兜底
-  const syncThemeLabel = () => {
-    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-    btnTheme.textContent = isLight ? '深色模式' : '浅色模式';
-  };
-  syncThemeLabel();
-  btnTheme.addEventListener('click', () => {
-    const cur = document.documentElement.getAttribute('data-theme');
-    const next = (cur === 'light') ? 'dark' : 'light';
-    applyTheme(next);
-    localStorage.setItem('wm_theme', next);
-    syncThemeLabel();
-  });
-
-  // 初始平台识别
-  renderChips();
-  updateDetect();
-  await checkSession();
+  const ok = await checkSession();
   updateUI();
-  scheduleFFmpegPreload();   // 进入页面即空闲预热剪辑引擎
+  if (ok) preloadFFmpeg();   // 已登录用户进入页面即后台预热剪辑引擎
 });
 </script>
 </body>

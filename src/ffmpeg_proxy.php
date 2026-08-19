@@ -25,12 +25,6 @@ function resolve_path($base, $rel) {
 header('Cross-Origin-Resource-Policy: cross-origin');
 
 $f = $_GET['f'] ?? '';
-// 空参数直接返回 400（而非落入后续 403），避免无意义 forbidden
-if ($f === '') {
-    http_response_code(400);
-    header('Content-Type: text/plain; charset=utf-8');
-    exit;
-}
 // f 由前端 base64 编码（避免 URL 中出现 .js/.wasm 字面量触发 InfinityFree 的 WAF 挑战页）
 if (preg_match('#^[A-Za-z0-9_-]+$#', $f)) {
     $f = base64_decode(strtr($f, '-_', '+/'), true);

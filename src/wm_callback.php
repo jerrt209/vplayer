@@ -27,11 +27,8 @@ if (empty($_SESSION['oauth_state']) || !hash_equals((string)$_SESSION['oauth_sta
     exit('state 校验失败，可能是跨站请求伪造，已拒绝。');
 }
 
-// PKCE：取回发起授权时保存的 code_verifier，换码时必须一并提交
-$verifier = $_SESSION['oauth_verifier'] ?? '';
-
-// 1) 用授权码换 token（带上 PKCE verifier）
-$tokenResp = oauth_exchange_code($code, $verifier);
+// 1) 用授权码换 token
+$tokenResp = oauth_exchange_code($code);
 $accessToken = pick($tokenResp, ['access_token', 'accessToken']);
 
 if (!$accessToken) {
@@ -57,45 +54,10 @@ $_SESSION['oauth_user'] = [
     'raw'          => $userResp,
 ];
 unset($_SESSION['oauth_state']);
-unset($_SESSION['oauth_verifier']);
 
-// 4) 完成页：自动关闭弹窗 + 通知父窗口刷新登录态。
-//    不要直接跳 index.html —— 那会让弹窗停留在首页且永不自动关闭。
-//    这里输出一个极简页面：立即向父窗口 postMessage({type:'oauth_done'})，
-//    并尝试 window.close() 自关；若无法自关（整页跳转场景），自动跳回首页。
+// 4) 跳回首页（保留原来的跳转目标）
 $next = $_SESSION['oauth_next'] ?? 'index.html';
 unset($_SESSION['oauth_next']);
-?>
-<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>登录成功</title>
-<style>
-body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0e0d22;color:#f5f2ff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;}
-.box{text-align:center;padding:32px;}
-svg{display:block;margin:0 auto 16px;}
-p{color:#bdb6e6;margin:0;}
-</style>
-</head><body>
-<div class="box">
-<svg width="52" height="52" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" fill="#30d158"/><path d="M7 12.4l3.3 3.3L17 9" stroke="#0a0a0a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-<p>登录成功，正在返回…</p>
-</div>
-<script>
-(function(){
-  var next = <?php echo json_encode($next); ?>;
-  // 1) 通知父窗口（若本窗口是被 window.open 打开的弹窗）
-  try {
-    if (window.opener && !window.opener.closed) {
-      window.opener.postMessage({ type: 'oauth_done' }, '*');
-    }
-  } catch (e) {}
-  // 2) 尝试自关（弹窗场景）；浏览器拒绝自关（非脚本打开的窗口）则跳回首页
-  try {
-    window.close();
-  } catch (e) {}
-  // 3) 兜底：若 window.close() 未生效（本页仍可见），短延时后跳回首页
-  setTimeout(function(){ location.href = next; }, 600);
-})();
-</script>
-</body></html>
+
+header('Location: ' . $next);
+exit;
