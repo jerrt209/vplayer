@@ -2,7 +2,7 @@
 /**
  * ============================================================
  *  去水印小程序 · 前端接口（wm_api.php）
- *  动作：check / login_url / logout / watermark / proxy_video
+ *  动作：check / watermark / proxy_video
  * ============================================================
  */
 require_once __DIR__ . '/config.php';
@@ -20,7 +20,7 @@ if (!is_array($post)) {
 $post = array_merge($_POST, $post);
 $action = $post['action'] ?? ($_GET['action'] ?? '');
 
-// 会话里记录免费次数（未登录用户）
+// 会话里记录免费次数（保留字段，但已去除 OAuth 登录中心，不再限制）
 if (!isset($_SESSION['free_used'])) $_SESSION['free_used'] = 0;
 
 function api_ok($data)   { echo json_encode(array_merge(['success' => true], $data), JSON_UNESCAPED_UNICODE); }
@@ -30,49 +30,13 @@ function api_err($msg, $extra = []) {
 
 switch ($action) {
 
-    // 查询登录态 + 剩余免费次数
+    // 查询登录态（已去除 OAuth 登录中心，固定返回游客态，前端不再依赖）
     case 'check':
-        $user = $_SESSION['oauth_user'] ?? null;
-        api_ok([
-            'logged_in' => !empty($user),
-            'user'      => $user ? ['username' => $user['username']] : null,
-            'free_left' => FREE_TRIES - $_SESSION['free_used'],
-        ]);
+        api_ok(['logged_in' => false, 'user' => null, 'free_left' => 0]);
         break;
 
-    // 返回授权地址（弹窗点“前往登录”时调用）
-    case 'login_url':
-        if (strpos(REDIRECT_URI, '你的域名') !== false) {
-            api_err('尚未配置回调地址：请修改 config.php 的 REDIRECT_URI 为你的真实域名');
-            break;
-        }
-        $state = bin2hex(random_bytes(16));
-        $_SESSION['oauth_state'] = $state;
-        $_SESSION['oauth_next']  = 'index.html';
-        $params = http_build_query([
-            'response_type' => 'code',
-            'client_id'     => CLIENT_ID,
-            'redirect_uri'  => REDIRECT_URI,
-            'scope'         => OAUTH_SCOPE,
-            'state'         => $state,
-        ]);
-        api_ok(['url' => OAUTH_AUTHORIZE . '&' . $params]);
-        break;
-
-    case 'logout':
-        session_destroy();
-        api_ok([]);
-        break;
-
-    // 解析去水印
+    // 解析去水印（已去除登录门槛与免费次数限制，直接可用）
     case 'watermark':
-        $user = $_SESSION['oauth_user'] ?? null;
-        if (empty($user)) {
-            if ($_SESSION['free_used'] >= FREE_TRIES) {
-                api_err('今日免费次数已用完，请登录后继续使用', ['need_login' => true]);
-                break;
-            }
-        }
         $text = trim($post['url'] ?? '');
         $url  = extract_url_from_text($text);
         if (!$url) {
@@ -84,7 +48,6 @@ switch ($action) {
             api_err($result['msg']);
             break;
         }
-        if (empty($user)) $_SESSION['free_used']++;
         api_ok($result);
         break;
 

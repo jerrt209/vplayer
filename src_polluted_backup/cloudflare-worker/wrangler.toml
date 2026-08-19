@@ -1,0 +1,8 @@
+name = "wm-proxy"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+# 免费方案即可（Workers Free）：每日 10 万次请求、流式转发不占内存。
+# 部署：先 `npx wrangler login`，再 `npx wrangler deploy`。
+# 部署成功后会得到地址：https://wm-proxy.<你的子域>.workers.dev
+# 把该地址填到 index.html 顶部的 const PROXY = '...' 即可启用加速。

@@ -526,24 +526,14 @@ body{
       <div class="brand-icon">去</div>
       <div>
         <div class="brand-name">去水印工具</div>
-        <div class="brand-sub">短视频解析 · Jerrt 会员中心</div>
+        <div class="brand-sub">短视频解析 · 免费无门槛</div>
       </div>
-    </div>
-    <div class="top-actions" id="top-actions">
-      <button class="icon-btn" id="logout-btn" title="退出登录" onclick="doLogout()" style="display:none;">
-        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 12H4m0 0l3.5-3.5M4 12l3.5 3.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-      </button>
-      <button class="icon-btn" id="center-btn" title="个人中心" onclick="openCenter()" style="display:none;">
-        <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2" fill="none"></circle><path d="M4 20c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="2" fill="none"></path></svg>
-      </button>
-      <button class="btn btn-primary" id="login-btn" style="width:auto;padding:9px 16px;font-size:13px;display:inline-block;" onclick="showLoginModal()">登录</button>
-      <button class="avatar-btn" id="avatar-btn" style="display:none;" onclick="openCenter()" title="个人中心"></button>
     </div>
   </div>
 
   <div class="glass hero">
     <h1>一键提取短视频去水印</h1>
-    <p>粘贴抖音 / 快手 / 小红书 / Bilibili 等平台分享链接或整段文案，自动提取并解析无水印原片。仅限 Jerrt 会员中心账号使用。</p>
+    <p>粘贴抖音 / 快手 / 小红书 / Bilibili 等平台分享链接或整段文案，自动提取并解析无水印原片。免费无门槛使用。</p>
 
     <div class="input-wrap">
       <input class="input-glass" id="url-input" placeholder="粘贴视频分享链接，如 https://v.douyin.com/xxxx/" autocomplete="off">
@@ -560,7 +550,7 @@ body{
 
     <div class="notice" id="free-notice">
       <svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="10" stroke="#7ec8ff" stroke-width="2" fill="none"></circle><path d="M12 8v5M12 16h.01" stroke="#7ec8ff" stroke-width="2" fill="none" stroke-linecap="round"></path></svg>
-      <span id="free-notice-text">游客可免费体验 1 次，登录后不限次数。</span>
+      <span id="free-notice-text">免费使用 · 不限次数</span>
     </div>
   </div>
 
@@ -578,7 +568,7 @@ body{
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
         在线分段剪辑
       </h3>
-      <p class="hint">可剪辑 2–3 段后一起下载，文件名自动编号为「视频名_1 / _2 / _3」。剪辑在浏览器本地完成，无需上传。游客需先登录。</p>
+      <p class="hint">可剪辑 2–3 段后一起下载，文件名自动编号为「视频名_1 / _2 / _3」。剪辑在浏览器本地完成，无需上传。</p>
       <div class="seg-total" id="segTotal">视频总时长：<b>——</b></div>
       <div class="seg-list" id="segList">
         <div class="seg-block" data-idx="1">
@@ -650,7 +640,7 @@ body{
   </div>
 
   <div class="footer">
-    由 <a href="http://api.ijerrt.cn/oauth/oauth.php?action=profile" target="_blank" rel="noopener">Jerrt 会员中心</a> 提供统一登录 · OAuth 2.0 授权登录
+    免费无门槛使用 · 无需登录
   </div>
 </div>
 
@@ -687,26 +677,6 @@ body{
   </div>
 </div>
 
-<!-- 登录弹窗（仿爱豆模拟器，不直接跳转） -->
-<div class="overlay hidden" id="login-modal">
-  <div class="modal">
-    <button class="modal-close" onclick="closeLoginModal()">×</button>
-    <div class="center-brand">
-      <div class="provider-badge">
-        <svg width="34" height="34" viewBox="0 0 56 56"><circle cx="28" cy="28" r="22" fill="#ffffff" opacity="0.16"></circle><path d="M20 28.5 L25 33.5 L37 21" fill="none" stroke="#ffffff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-      </div>
-      <span style="font-size:12px;font-weight:700;letter-spacing:.5px;color:var(--text);">Jerrt 会员中心</span>
-    </div>
-    <h2 style="margin-top:6px;">登录以继续使用</h2>
-    <p class="sub2">使用 Jerrt 会员中心统一登录后，即可无限次解析短视频去水印，并解锁在线分段剪辑。</p>
-    <button class="btn btn-primary" onclick="redirectToOAuth()">
-      <svg viewBox="0 0 24 24" width="16" height="16"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"></path></svg>
-      使用 Jerrt 会员中心 登录
-    </button>
-    <button class="btn btn-outline" onclick="closeLoginModal()">稍后再说</button>
-  </div>
-</div>
-
 <!-- 倍速剪辑 Debug 确认弹窗 -->
 <div class="overlay hidden" id="speed-confirm">
   <div class="modal speed-confirm-modal">
@@ -734,14 +704,10 @@ body{
 <script>
 /* ===== 后端接口配置（与已部署的 wm_api.php / wm_callback.php 一致） ===== */
 const API = 'wm_api.php';
-const OAUTH_CENTER = 'http://api.ijerrt.cn/oauth/oauth.php?action=profile';
 // 视频代理地址：留空 = 用本站 PHP 代理（proxy_video）；
 // 部署 Cloudflare Worker 后填其地址（如 https://wm-proxy.xxx.workers.dev）即可就近加速下载与剪辑。
 const PROXY = '';
-
-let STATE = { user: null, loggedIn: false, videoUrl: '', duration: 0, freeLeft: 1 };
-let pollTimer = null;
-let popup = null;
+let STATE = { user: null, loggedIn: false, videoUrl: '', duration: 0, freeLeft: Infinity };
 
 /* ===== 基础请求 ===== */
 async function api(action, data = {}) {
@@ -822,9 +788,23 @@ async function streamSave(url, name) {
 function showDlLoading() { document.getElementById('dl-loading').classList.remove('hidden'); }
 function hideDlLoading() { document.getElementById('dl-loading').classList.add('hidden'); }
 
-/* 智能下载：直连流式写盘（最快、不爆内存）→ 直连 blob（小文件）→ 代理兜底 */
+/* 判断是否 B站 CDN 直链（带 upsig 签名 + 防盗链，浏览器直连必 403 → 必须走代理） */
+function isBiliCdn(url) {
+  return /bilivideo\.|mountaintoys\.|hdslb\.|biliimg\./.test(url || '');
+}
+
+/* 智能下载：
+   · 其它平台（抖音/快手等）CDN 允许直连 → 直连流式写盘（最快、不爆内存）→ 直连 blob → 代理兜底。
+   · B站：直连必 403，直接走第3级代理（fetch 拿 blob 触发一次下载），
+     避免「先弹保存对话框写 .crswap 失败、又再弹一次」的双重下载弹窗。 */
 async function smartDownload(url, name, ev) {
   if (ev) ev.preventDefault();
+  if (isBiliCdn(url)) {
+    showDlLoading();
+    try { await downloadViaProxy(url, name); }
+    finally { hideDlLoading(); }
+    return;
+  }
   showDlLoading();   // 显示「正在努力获取下载链接…」加载提示
   try {
     // 1) 直连 + 文件系统流式写盘（桌面 Chromium：大文件不占内存，且直连国内 CDN 最快）
@@ -845,90 +825,18 @@ async function smartDownload(url, name, ev) {
 }
 
 /* ===== 会话检查 ===== */
+// 已去除 Jerrt OAuth 登录中心：不再弹登录、不限额、始终可用（解析/剪辑无门槛）。
 async function checkSession() {
-  const r = await api('check');
-  if (r.success && r.logged_in && r.user) {
-    STATE.loggedIn = true; STATE.user = r.user; STATE.freeLeft = r.free_left ?? 0;
-    return true;
-  }
-  STATE.loggedIn = false; STATE.freeLeft = (r.success ? (r.free_left ?? 1) : 1);
-  return false;
+  STATE.loggedIn = true; STATE.user = null; STATE.freeLeft = Infinity;
+  return true;
 }
 
-/* ===== 登录弹窗 ===== */
-function showLoginModal() { document.getElementById('login-modal').classList.remove('hidden'); }
-function closeLoginModal() { document.getElementById('login-modal').classList.add('hidden'); }
-
-/* ===== 发起 OAuth（授权码流程，弹窗授权 + 轮询共享会话）===== */
-async function redirectToOAuth() {
-  toast('正在连接 Jerrt 会员中心…');
-  const r = await api('login_url');
-  if (!r.success) { toast(r.msg || '授权初始化失败', 'error'); return; }
-  popup = window.open(r.url, 'oauth', 'width=460,height=720');
-  startLoginPoll();
-  if (!popup) { window.location.href = r.url; }   // 弹窗被拦截则回退整页跳转
-}
-
-function startLoginPoll() {
-  clearInterval(pollTimer);
-  pollTimer = setInterval(async () => {
-    const ok = await checkSession();
-    if (ok) {
-      clearInterval(pollTimer);
-      if (popup && !popup.closed) popup.close();
-      closeLoginModal();
-      updateUI();
-      toast('登录成功，欢迎 ' + (STATE.user?.username || ''));
-      preloadFFmpeg();   // 登录后立即后台预加载剪辑引擎，点剪辑时即就绪
-    }
-  }, 1500);
-  // 兜底：60s 后若仍未登录，停止轮询（用户可在弹窗内手动完成）
-  setTimeout(() => clearInterval(pollTimer), 60000);
-}
-
-/* ===== 个人中心 ===== */
-function openCenter() { window.open(OAUTH_CENTER, '_blank', 'noopener'); }
-
-/* ===== 登出 ===== */
-async function doLogout() {
-  await api('logout');
-  STATE.loggedIn = false; STATE.user = null;
-  updateUI();
-  toast('已退出登录');
-}
-
-/* ===== UI 状态 ===== */
+/* ===== UI 状态（已去除 OAuth 登录中心，无门槛）===== */
 function updateUI() {
-  const loginBtn  = document.getElementById('login-btn');
-  const centerBtn = document.getElementById('center-btn');
-  const avatarBtn = document.getElementById('avatar-btn');
-  const logoutBtn = document.getElementById('logout-btn');
   const notice    = document.getElementById('free-notice');
   const noticeTxt = document.getElementById('free-notice-text');
-
-  if (STATE.loggedIn) {
-    loginBtn.style.display  = 'none';
-    centerBtn.style.display = 'flex';
-    logoutBtn.style.display = 'flex';
-    const name = STATE.user?.username || 'U';
-    avatarBtn.textContent = name.charAt(0).toUpperCase();
-    avatarBtn.style.display = 'flex';
-    avatarBtn.onclick = openCenter;
-    notice.classList.add('hidden');
-  } else {
-    loginBtn.style.display  = 'inline-block';
-    centerBtn.style.display = 'none';
-    logoutBtn.style.display = 'none';
-    avatarBtn.style.display = 'none';
-    notice.classList.remove('hidden');
-    if (STATE.freeLeft > 0) {
-      notice.classList.remove('warn');
-      noticeTxt.textContent = '游客可免费体验 ' + STATE.freeLeft + ' 次，登录后不限次数。';
-    } else {
-      notice.classList.add('warn');
-      noticeTxt.textContent = '免费次数已用完，请登录后继续使用。';
-    }
-  }
+  if (notice) notice.classList.remove('hidden');
+  if (noticeTxt) noticeTxt.textContent = '免费使用 · 不限次数';
 }
 
 /* ===== 粘贴整段文案时自动提取链接 ===== */
@@ -965,16 +873,12 @@ async function onExtract() {
   btn.disabled = false;
 
   if (!j.success) {
-    if (j.need_login) { showLoginModal(); return; }
     toast(j.msg || '解析失败', 'error');
     return;
   }
 
-  // 游客成功后刷新剩余免费次数
-  await checkSession();
-  updateUI();
   renderResult(j);
-  if (STATE.loggedIn) preloadFFmpeg();   // 已登录则顺便后台预热剪辑引擎
+  preloadFFmpeg();   // 后台预热剪辑引擎，点剪辑时即就绪
   toast('解析成功');
 }
 
@@ -1296,7 +1200,6 @@ function downloadAll() {
 }
 
 async function doTrim() {
-  if (!STATE.loggedIn) { showLoginModal(); return; }
   if (!STATE.videoUrl) { toast('请先解析视频', 'error'); return; }
 
   const trimBtn = document.getElementById('trim-btn');

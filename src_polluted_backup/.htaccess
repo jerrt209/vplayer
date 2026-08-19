@@ -1,0 +1,8 @@
+# 注意：已移除 COOP/COEP（跨域隔离）头。
+# 剪辑引擎改为「同源代理 ffmpeg_proxy.php」加载后，所有 ffmpeg 资源均为同源，
+# 无需跨域隔离；保留 COEP 反而会因 require-corp 拦截无 CORS 的视频源（如抖音）导致预览黑屏。
+
+# 缓存静态资源
+<FilesMatch "\.(js|css|png|jpg|svg|ico|wasm)$">
+    Header set Cache-Control "public, max-age=86400"
+</FilesMatch>
