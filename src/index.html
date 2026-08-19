@@ -975,51 +975,74 @@ function isBiliUrl(url) {
   return /bilivideo\.|mountaintoys\.|hdslb\.|biliimg\./.test(url || '');
 }
 
-/* 智能下载：浏览器原生下载器触发（不 fetch、不 blob，交给系统下载器多线程并发、
-   带宽自适应、原生进度条）。
-   关键修复：之前 <a href="..." download onclick=...> 被浏览器跟随一次 + onclick 再一次，
-   现在 onclick 首句同步 preventDefault + 用临时 <a> click 触发，仅下载一次。
-   ——
-   路由规则（全平台直连优先，B站走服务端代理）：
-   · 其余平台（抖音/快手/小红书/TikTok 等）CDN 允许无 Referer 直连 → 浏览器 no-referrer
-     直连，速度只取决于用户带宽，不经本站服务器、不占本站出口。
-   · B站：官方 durl 直链带 upsig/uparams 签名 + 强制校验 bilibili Referer/UA，浏览器
-     no-referrer 直连必 403（已实测，改写 platform 还会破坏签名同样 403）。因此下载一律
-     走服务端代理 wm_api?action=proxy_video（服务器代填正确 Referer/UA），保证能下。 */
-function smartDownload(url, name, ev) {
-  if (ev) {
-    try { ev.preventDefault(); } catch (_) {}
-    try { ev.stopImmediatePropagation(); } catch (_) {}
-  }
-  try { showDlLoading(); } catch (_) {}
-  // B站：强制防盗链（签名 + Referer），浏览器直连必 403 → 走服务端代理下载。
-  if (isBiliUrl(url)) {
+/* fetch + blob 触发真正下载：经代理（同源或 Worker），跨域也能存盘。 */
+async function downloadViaProxy(url, name, ev) {
+  if (ev) ev.preventDefault();
+  try {
+    const resp = await fetch(dlUrl(url, name));
+    if (!resp.ok) throw new Error('代理返回 ' + resp.status);
+    const blob = await resp.blob();
+    const burl = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = dlUrl(url, name);          // 走本站代理，服务器代填 bilibili Referer/UA
-    a.referrerPolicy = 'no-referrer';
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => a.remove(), 0);
-    setTimeout(() => {
-      try { hideDlLoading(); } catch (_) {}
-      try { toast('B站需防盗链代转，已走服务端代理下载：' + name); } catch (_) {}
-    }, 600);
-    return;
+    a.href = burl; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(burl), 5000);
+    toast('已开始下载：' + name);
+  } catch (e) {
+    toast('下载失败：' + (e.message || e), 'error');
   }
-  // 其余平台（抖音等，+ 个别放行的直链）→ 浏览器直连源站 CDN，走用户带宽。
+}
+
+/* 直连源站下载：不经过任何代理，国内 CDN 直连最快、走用户带宽。
+   仅当源站允许跨域(CORS)时才成功，否则浏览器拒绝读取响应并由 smartDownload 回退代理。 */
+async function downloadDirect(url, name) {
+  const resp = await fetch(url, { referrerPolicy: 'no-referrer' });
+  if (!resp.ok) throw new Error('直连返回 ' + resp.status);
+  const blob = await resp.blob();
+  const burl = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;                        // 直连 CDN，不经服务器
-  a.download = name;
-  a.referrerPolicy = 'no-referrer';    // 不送本站 Referer，放行直连
-  a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => a.remove(), 0);
-  setTimeout(() => {
-    try { hideDlLoading(); } catch (_) {}
-    try { toast('已开始下载（直连 CDN，走用户带宽）：' + name); } catch (_) {}
-  }, 600);
+  a.href = burl; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(burl), 5000);
+}
+
+/* 流式写盘下载：桌面 Chromium 支持 File System Access API，可边下边写磁盘，
+   不占内存，适合长视频；移动端/Safari 不支持时返回 false 由上层回退。 */
+async function streamSave(url, name) {
+  if (!('showSaveFilePicker' in window)) return false;
+  const handle = await window.showSaveFilePicker({
+    suggestedName: name,
+    types: [{ description: '视频文件', accept: { 'video/mp4': ['.mp4'] } }]
+  });
+  const writable = await handle.createWritable();
+  const resp = await fetch(url, { referrerPolicy: 'no-referrer' });
+  if (!resp.ok) throw new Error('直连返回 ' + resp.status);
+  await resp.body.pipeTo(writable);
+  return true;
+}
+
+/* 智能下载：直连流式写盘（最快、不爆内存）→ 直连 blob（小文件）→ 代理兜底。
+   全平台一律「先直连源站（走用户带宽），跨域/403 被拦时自动回退服务端代理」，
+   保证 B站 等强防盗链链接也能成功下载。已对齐线上可下载版本逻辑。 */
+async function smartDownload(url, name, ev) {
+  if (ev) ev.preventDefault();
+  showDlLoading();   // 显示「正在努力获取下载链接…」加载提示
+  try {
+    // 1) 直连 + 文件系统流式写盘（桌面 Chromium：大文件不占内存，且直连国内 CDN 最快）
+    try {
+      if (await streamSave(url, name)) { toast('已开始下载（直连加速）：' + name); return; }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return; // 用户主动取消保存，不回退
+    }
+    // 2) 直连 blob（小文件，或浏览器不支持流式写盘时）
+    try { await downloadDirect(url, name); toast('已开始下载（直连加速）：' + name); return; }
+    catch (e) { /* 跨域被拦，回退 */ }
+    // 3) 代理兜底（慢但稳，B站等强防盗链走这里）
+    try { await downloadViaProxy(url, name); }
+    catch (e2) { /* downloadViaProxy 内部已 toast */ }
+  } finally {
+    hideDlLoading();
+  }
 }
 
 /* ===== 会话检查 ===== */
