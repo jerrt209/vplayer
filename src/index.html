@@ -1515,12 +1515,11 @@ function renderResult(j, rawText) {
     v.controls = true; v.preload = 'metadata';
     v.referrerPolicy = 'no-referrer';
     media.appendChild(v);
-    // 播放链路：直连优先（no-referrer 即可放行 B站/抖音防盗链），加载失败才切服务器代理兜底。
-    // 之前 B站 一上来就强制走服务器代理中转——主机到 CDN 很慢/超时会直接放不出来（黑屏/无法浏览），
-    // 现在让浏览器直连 CDN，速度只取决于用户宽带；代理仅作兜底。
+    // 播放链路：B站 CDN 防盗链（no-referrer 直连实测 403），必须走带 bilibili Referer 的代理；
+    // 其他平台无防盗链 → 直连优先（no-referrer），加载失败才切代理兜底。
     const directUrl = j.video_url;
     const proxyUrl = proxyVideoUrl(j.video_url);   // 不带 name，纯流式转发，用于播放
-    let switchedToProxy = false;
+    let switchedToProxy = isBiliUrl(directUrl);     // B站默认直接走代理
     v.addEventListener('error', function onErr() {
       if (switchedToProxy) return;                 // 已切代理仍失败，不再循环
       if (v.getAttribute('src') !== proxyUrl) {
@@ -1529,11 +1528,11 @@ function renderResult(j, rawText) {
         v.load();
       }
     });
-    v.src = directUrl;
-    // 封面（poster）：元素已设 referrerPolicy='no-referrer'，poster 请求同样不送 Referer，
-    // 因此 hdslb.com 等 B站防盗链图床也无需再走服务器代理，直连即可（之前强制走代理，代理一挂封面就黑）。
+    v.src = switchedToProxy ? proxyUrl : directUrl;
+    // 封面（poster）：B站图床(hdslb)同属防盗链，直连 403 → 走代理（带 bilibili Referer）；
+    // 其他平台直连即可（元素 no-referrer）。
     if (j.cover_url) {
-      v.poster = j.cover_url;   // 直连（no-referrer），B站图床无需代理
+      v.poster = isBiliUrl(j.cover_url) ? proxyVideoUrl(j.cover_url) : j.cover_url;
     }
     const vName = base + '.mp4';
     // —— 修复「下载两次」：<a> 的 href 不再直接指向下载链接（避免浏览器默认跟随），所有下载由

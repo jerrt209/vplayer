@@ -205,12 +205,13 @@ function stream_proxy($url, $filename = '') {
 
     $range = $_SERVER['HTTP_RANGE'] ?? '';
     $referer = referer_for_host(parse_url($url, PHP_URL_HOST) ?: '');
-    $hdrs  = [
+    $baseHdrs = [
         'Referer: ' . $referer,
         'Origin: '  . $referer,
         'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
     ];
-    if ($range) $hdrs[] = "Range: $range";
+    $hdrs = $baseHdrs;
+    if ($range !== '') $hdrs[] = "Range: $range";
 
     // —— 文件名 RFC 5987 双段（保留中文） ——
     $sendAscii = '';
@@ -233,29 +234,71 @@ function stream_proxy($url, $filename = '') {
         }
     }
 
-    // —— 性能：HEAD 用 5s 超时探测 Content-Type；不阻塞主转发，HEAD 失败不致命 ——
+    // —— HEAD 探测：拿到 Content-Type + 资源总字节数（用于正确的 Content-Length / Content-Range / 416） ——
     $ctype = 'application/octet-stream';
+    $total = null;        // 上游资源总字节数
+    $status = 200;
+    $chunkLen = null;     // 本次响应体字节数（Range 时=区间长度；否则=全文长度；未知则不设 Content-Length）
     if (function_exists('curl_init')) {
         $headCh = curl_init($url);
+        // bytes=0-0 探测：多数 CDN 回 206 + Content-Range，可拿到总大小（优于裸 HEAD 拿不到长度）
+        $headHdrs = array_merge($baseHdrs, ['Range: bytes=0-0']);
         curl_setopt_array($headCh, [
             CURLOPT_NOBODY => true, CURLOPT_HEADER => true,
             CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_TIMEOUT => 5, CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => 6, CURLOPT_CONNECTTIMEOUT => 6,
             CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_HTTPHEADER => $hdrs,
+            CURLOPT_HTTPHEADER => $headHdrs,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
         ]);
         $head = curl_exec($headCh);
         curl_close($headCh);
-        if ($head && preg_match('/content-type:\s*(.+)/i', $head, $m)) {
-            $ctype = trim($m[1]);
+        if ($head) {
+            if (preg_match('/content-type:\s*([^\r\n]+)/i', $head, $m)) $ctype = trim($m[1]);
+            if (preg_match('/content-range:\s*bytes\s+\d+-\d+\/(\d+|\*)/i', $head, $m)) {
+                $total = ($m[1] === '*') ? null : (int)$m[1];
+            } elseif (preg_match('/content-length:\s*(\d+)/i', $head, $m)) {
+                $total = (int)$m[1];
+            }
         }
     }
 
-    // 响应头一次性写出去（cURL 直 stream 到 php://output 期间不能再 header()）
+    // 解析客户端 Range → 正确响应状态 + Content-Range + Content-Length
+    // （否则浏览器/下载器拿不到长度，断流也无从察觉；分片 seek 也会错）
+    $contentRange = '';
+    if ($range !== '') {
+        $status = 206;
+        $from = $to = null;
+        if (preg_match('/bytes=(\d*)-(\d*)/i', $range, $rm)) {
+            $from = ($rm[1] === '') ? null : (int)$rm[1];
+            $to   = ($rm[2] === '') ? null : (int)$rm[2];
+        }
+        if ($from !== null && $total !== null && $from >= $total) {
+            header('Access-Control-Allow-Origin: *');
+            http_response_code(416);
+            header('Content-Type: ' . $ctype);
+            header('Content-Range: bytes */' . $total);
+            header('Content-Length: 0');
+            exit;
+        }
+        if ($from === null && $total !== null) $from = 0;
+        if ($to === null && $total !== null) $to = $total - 1;
+        if ($from !== null && $to !== null) {
+            $chunkLen = $to - $from + 1;
+            $contentRange = 'bytes ' . $from . '-' . $to . '/' . ($total !== null ? $total : '*');
+        }
+    } elseif ($total !== null) {
+        $chunkLen = $total;   // 全文已知大小 → 声明 Content-Length，CDN 断流即可被客户端察觉
+    }
+
+    // 响应头一次性写出去（cURL 直 stream 到 php://output 期间不能再 header()；注意先 status 再 Content-Range）
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges');
     header('Content-Type: ' . $ctype);
     header('Accept-Ranges: bytes');
+    http_response_code($status);
+    if ($status === 206 && $contentRange !== '') header('Content-Range: ' . $contentRange);
+    if ($chunkLen !== null) header('Content-Length: ' . $chunkLen);
     if ($sendAscii !== '') {
         header('Content-Disposition: attachment; filename="' . $sendAscii . '"; filename*=UTF-8\'\'' . rawurlencode($cleanForDisp));
     }
@@ -279,7 +322,13 @@ function stream_proxy($url, $filename = '') {
         CURLOPT_ENCODING => '',
     ]);
     curl_exec($ch);
+    $derr = curl_errno($ch);           // 断流检测：上游在 Content-Length 前断开（如某些节点只发 moov 就断）
     curl_close($ch);
+    if ($derr === 18) {
+        // CURLE_PARTIAL_FILE——CDN 半路断开。响应头已发出，Body 已截断，
+        // 但 Content-Length 已声明，客户端能立刻察觉断流并可用 Range 续传。
+        @error_log('stream_proxy partial-file(upstream disconnect) url=' . substr($url, 0, 140));
+    }
     @fflush($out);
     @fclose($out);
     exit;
