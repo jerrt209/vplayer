@@ -480,8 +480,10 @@ function bili_parse($url, $cookie = BILI_COOKIE, $qn = 127, $timeout = 8) {
         }
     }
     $dur   = $d['duration'] ?? 0;
-    // fnval=0 取合流直链（音视频合一，便于下载与剪辑），fourk=1 允许 4K
-    $pl = do_curl(BILI_PLAYURL . '?' . $param . '&cid=' . $cid . '&qn=' . (int)$qn . '&fnval=0&fourk=1', 'GET', null, bili_headers($cookie), '', $timeout);
+    // fnval=0 取合流直链（音视频合一，便于下载与剪辑）。
+    // fourk=0：与线上稳定版一致，B站官方 720P 合流直链最稳、不易触发风控；
+    // 配置 BILI_COOKIE 后 qn 仍可请求更高画质（1080P/4K）。
+    $pl = do_curl(BILI_PLAYURL . '?' . $param . '&cid=' . $cid . '&qn=' . (int)$qn . '&fnval=0&fourk=0', 'GET', null, bili_headers($cookie), '', $timeout);
     $p = json_decode($pl['body'], true);
     if (!is_array($p) || ($p['code'] ?? -1) != 0 || empty($p['data']['durl'])) {
         return ['success' => false, 'msg' => 'Bilibili 获取直链失败：' . ($p['message'] ?? '未知错误')];
