@@ -1245,42 +1245,36 @@ function isBiliUrl(url) {
   return /bilivideo\.|mountaintoys\.|hdslb\.|biliimg\./.test(url || '');
 }
 
-/* 智能下载：浏览器原生系统下载器（自带进度/速度/暂停续传）。
-   关键修复：之前 <a href="..." download onclick=...> 会在点击时同时被浏览器原生跟随
-   + onclick 再 fetch 一次（再下一次），现在让 onclick 同步 preventDefault
-   + 用临时 <a> click 触发，保证只下载一次。
+/* 智能下载：浏览器原生下载器触发（不 fetch、不 blob，交给系统下载器多线程并发、
+   带宽自适应、原生进度条）。
+   关键修复：之前 <a href="..." download onclick=...> 被浏览器跟随一次 + onclick 再一次，
+   现在 onclick 首句同步 preventDefault + 用临时 <a> click 触发，仅下载一次。
    ——
-   零源站流量策略：默认走 B站 CDN / 抖音 CDN 的直链 + 自带浏览器下载（不进你 PHP），
-   防盗链 403 时才回退到 wm_api.php 代理。这样你源站出口带宽**不背** 100% 流量。 */
-/* 智能下载：浏览器原生下载器触发（最快方式：不写 JS、不 fetch、不 blob，
-   让浏览器用系统下载器，多线程并发、带宽自适应、原生进度条）。
-   关键修复：之前 <a href="..." download onclick=...> 会被浏览器跟随一次 + onclick 再一次，
-   现在 onclick 第 1 句同步 preventDefault，再用临时 <a> click 触发，仅下载一次。
-   ——
-   直接走 dlUrl（wm_api.php 代理带正确 Referer 解决防盗链，并已做零拷贝 + 关缓冲优化）。
-   之前因智能回退 / 8s 等待确实会感知到"慢"——那一段已删除，不再二次回退。 */
+   路由规则（已按实测收敛）：
+   · B站 CDN（bilivideo / mountaintoys / hdslb / biliimg 等）有强防盗链：无 Referer 直连
+     (=no-referrer) 实测必 403。只能走本站代理 wm_api.php?action=proxy_video —— 服务端已自动
+     带 bilibili Referer + 正确 Range / Content-Length / 断点续传。这是 B站可下载的唯一可行路径。
+   · 其余平台（抖音等）CDN 允许无 Referer 直连 → 浏览器直连，速度只取决于用户带宽，
+     全程不经本站服务器、不占本站出口。 */
 function smartDownload(url, name, ev) {
   if (ev) {
     try { ev.preventDefault(); } catch (_) {}
     try { ev.stopImmediatePropagation(); } catch (_) {}
   }
   try { showDlLoading(); } catch (_) {}
-  // —— 直连源站 CDN（no-referrer）——
-  // 之前所有下载都走 wm_api.php?action=proxy_video 服务器中转：主机到 CDN 中转很慢/受限/超时
-  // （B站等被主机侧直接报错），且消耗主机出口带宽，导致“下载很慢 / 根本无法下载”。
-  // 浏览器下载（<a download>）不需要 CORS，也不需要 Referer（no-referrer 即可放行 B站/抖音防盗链），
-  // 直接让用户宽带直连 CDN，速度只取决于用户网络，彻底绕开慢速/受限主机。代理仅作兜底。
+  const isBili = isBiliUrl(url);                    // B站 特殊防盗链 → 走代理；其余直连
+  const target = isBili ? dlUrl(url, name) : url;   // B站代理带正确 Referer + 下载文件名
   const a = document.createElement('a');
-  a.href = url;                        // 直连 CDN，不经服务器
+  a.href = target;
   a.download = name;
-  a.referrerPolicy = 'no-referrer';    // 防盗链站(如 B站)不送 Referer 即可直连全速
+  if (!isBili) a.referrerPolicy = 'no-referrer';    // 直连才 no-referrer；代理为同源不必设
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();
   setTimeout(() => a.remove(), 0);
   setTimeout(() => {
     try { hideDlLoading(); } catch (_) {}
-    try { toast('已开始下载（直连 CDN，最速）：' + name); } catch (_) {}
+    try { toast(isBili ? '已开始下载（经本站定向代理）：' + name : '已开始下载（直连 CDN，最速）：' + name); } catch (_) {}
   }, 600);
 }
 
@@ -1543,11 +1537,9 @@ function renderResult(j, rawText) {
     dlV.style.display = 'flex';
   } else if (j.cover_url) {
     const img = document.createElement('img');
-    const pUrl = proxyVideoUrl(j.cover_url);
-    // 封面直连优先（no-referrer 放行 B站图床防盗链），加载失败才切服务器代理兜底。
-    img.src = j.cover_url;
+    // 封面路由：B站图床(hdslb/biliimg)防盗链，无 Referer 直连同样 403 → 直接走代理；其余直连。
+    img.src = isBiliUrl(j.cover_url) ? proxyVideoUrl(j.cover_url) : j.cover_url;
     img.referrerPolicy = 'no-referrer';
-    img.onerror = function () { if (img.src.indexOf('action=proxy_video') < 0) img.src = pUrl; };
     media.appendChild(img);
     const cName = base + '_cover.jpg';
     dlV.href = '#';
@@ -2106,9 +2098,14 @@ async function doTrim() {
     };
     // 整段视频只下载一次，所有片段复用（下载是主要耗时，避免重复下）
     let data;
-    // 先直连（no-referrer）：CDN 允许跨域则最速，不占主机带宽；失败再回退服务器代理。
-    try { data = await fetchWithProgress(STATE.videoUrl, onDl); }
-    catch (e) { console.warn('直连取源失败，回退代理:', e?.message); data = await fetchWithProgress(proxy, onDl); }
+    // 取源：B站 防盗链无 Referer 直连必 403 → 直接走代理（服务端带 bilibili Referer）；
+    // 其余平台直连优先（最速、不占主机带宽），失败再回退服务器代理兜底。
+    if (isBiliUrl(STATE.videoUrl)) {
+      data = await fetchWithProgress(proxy, onDl);
+    } else {
+      try { data = await fetchWithProgress(STATE.videoUrl, onDl); }
+      catch (e) { console.warn('直连取源失败，回退代理:', e?.message); data = await fetchWithProgress(proxy, onDl); }
+    }
     await ffmpeg.writeFile('in.mp4', data);
 
     let curSeg = 0;
